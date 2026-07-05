@@ -6,9 +6,8 @@ members = ["crates/solbench-core", "crates/solbench-cli"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-# TODO(nyk): confirm final repo slug before publishing.
-repository = "https://github.com/0xNyk/solbench"
-authors = ["0xNyk"]
+repository = "https://github.com/rpc-edge/solbench"
+authors = ["0xNyk <0xnykcd@googlemail.com>"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
