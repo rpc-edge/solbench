@@ -28,6 +28,9 @@ enum Command {
         /// Samples per endpoint.
         #[arg(long, default_value_t = 20)]
         samples: usize,
+        /// Emit raw per-endpoint results as JSON (for CI / reproducible runs).
+        #[arg(long)]
+        json: bool,
     },
     /// Serve a live latency dashboard on localhost.
     Serve {
@@ -43,32 +46,39 @@ enum Command {
 
 fn main() {
     match Cli::parse().command {
-        Command::Probe { samples } => {
+        Command::Probe { samples, json } => {
             let endpoints = endpoints_from_env();
-            if endpoints.iter().all(|e| e.label != "rpc edge") {
+            if !json && endpoints.iter().all(|e| e.label != "rpc edge") {
                 eprintln!("note: set SOLBENCH_RPCEDGE_URL to include rpc edge in the comparison.");
             }
+            let results: Vec<_> = endpoints.iter().map(|ep| probe_rpc(ep, samples)).collect();
+
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&results).expect("results serialize")
+                );
+                return;
+            }
+
+            let ms = |ns: u64| format!("{:.2}", ns as f64 / 1e6);
             println!(
-                "{:<16} {:<26} {:>8} {:>8} {:>8} {:>7} {:>12}",
-                "endpoint", "host", "p50ms", "p90ms", "p99ms", "ok", "slot"
+                "{:<16} {:<26} {:>8} {:>8} {:>8} {:>8} {:>7} {:>12}",
+                "endpoint", "host", "p50ms", "p99ms", "jitter", "max", "ok", "slot"
             );
-            for ep in &endpoints {
-                let r = probe_rpc(ep, samples);
-                let (p50, p90, p99) = match &r.latency {
-                    Some(l) => (
-                        format!("{:.2}", l.p50_ns as f64 / 1e6),
-                        format!("{:.2}", l.p90_ns as f64 / 1e6),
-                        format!("{:.2}", l.p99_ns as f64 / 1e6),
-                    ),
-                    None => ("-".into(), "-".into(), "-".into()),
+            for r in &results {
+                let (p50, p99, jitter, max) = match &r.latency {
+                    Some(l) => (ms(l.p50_ns), ms(l.p99_ns), ms(l.stddev_ns), ms(l.max_ns)),
+                    None => ("-".into(), "-".into(), "-".into(), "-".into()),
                 };
                 println!(
-                    "{:<16} {:<26} {:>8} {:>8} {:>8} {:>7} {:>12}",
+                    "{:<16} {:<26} {:>8} {:>8} {:>8} {:>8} {:>7} {:>12}",
                     r.label,
                     r.host,
                     p50,
-                    p90,
                     p99,
+                    jitter,
+                    max,
                     format!("{}/{}", r.ok, r.samples),
                     r.current_slot
                         .map(|s| s.to_string())
@@ -76,9 +86,10 @@ fn main() {
                 );
             }
             eprintln!(
-                "\nnote: getSlot round-trip from THIS host (read latency) - dominated by network\n\
-                 distance to the client, NOT a proxy for tx-landing or shred first-seen latency.\n\
-                 Run from your co-located edge for a comparison that reflects the infra."
+                "\njitter = stddev (consistency); lower is steadier. getSlot round-trip from THIS\n\
+                 host (read latency) - dominated by network distance to the client, NOT a proxy for\n\
+                 tx-landing or shred first-seen latency. Run from your co-located edge for a\n\
+                 comparison that reflects the infra."
             );
         }
         Command::Serve { port, samples } => {

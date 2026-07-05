@@ -10,6 +10,10 @@ pub struct LatencySummary {
     pub min_ns: u64,
     pub max_ns: u64,
     pub mean_ns: u64,
+    /// Population standard deviation of the samples ("jitter"/consistency). A high
+    /// value relative to the median means an inconsistent endpoint - which for
+    /// trading matters as much as a low median.
+    pub stddev_ns: u64,
     pub p50_ns: u64,
     pub p90_ns: u64,
     pub p99_ns: u64,
@@ -82,12 +86,23 @@ impl LatencyRecorder {
         sorted.sort_unstable();
         let count = sorted.len();
         let sum: u128 = sorted.iter().map(|&x| x as u128).sum();
-        let mean_ns = (sum / count as u128) as u64;
+        let mean_f = sum as f64 / count as f64;
+        let mean_ns = mean_f as u64;
+        let variance = sorted
+            .iter()
+            .map(|&x| {
+                let d = x as f64 - mean_f;
+                d * d
+            })
+            .sum::<f64>()
+            / count as f64;
+        let stddev_ns = variance.sqrt() as u64;
         Some(LatencySummary {
             count,
             min_ns: sorted[0],
             max_ns: sorted[count - 1],
             mean_ns,
+            stddev_ns,
             p50_ns: percentile_ns(&sorted, 0.50),
             p90_ns: percentile_ns(&sorted, 0.90),
             p99_ns: percentile_ns(&sorted, 0.99),
@@ -116,6 +131,7 @@ mod tests {
         assert_eq!(s.min_ns, 1);
         assert_eq!(s.max_ns, 100);
         assert_eq!(s.mean_ns, 50); // 5050 / 100 == 50 (integer)
+        assert_eq!(s.stddev_ns, 28); // population stddev of 1..=100 ≈ 28.87
         assert_eq!(s.p50_ns, 50);
         assert_eq!(s.p90_ns, 90);
         assert_eq!(s.p99_ns, 99);
@@ -130,6 +146,7 @@ mod tests {
         assert_eq!(s.count, 1);
         assert_eq!(s.min_ns, 42);
         assert_eq!(s.max_ns, 42);
+        assert_eq!(s.stddev_ns, 0);
         assert_eq!(s.p50_ns, 42);
         assert_eq!(s.p999_ns, 42);
     }

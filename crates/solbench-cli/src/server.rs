@@ -47,8 +47,8 @@ fn render(results: &[ProbeResult], samples: usize) -> String {
     let mut rows = String::new();
     for r in results {
         let is_best = best.as_deref() == Some(r.host.as_str());
-        let (p50, p90, p99) = match &r.latency {
-            Some(l) => (ms(l.p50_ns), ms(l.p90_ns), ms(l.p99_ns)),
+        let (p50, p99, jitter) = match &r.latency {
+            Some(l) => (ms(l.p50_ns), ms(l.p99_ns), ms(l.stddev_ns)),
             None => ("-".into(), "-".into(), "-".into()),
         };
         let slot = r
@@ -66,15 +66,15 @@ fn render(results: &[ProbeResult], samples: usize) -> String {
         };
         rows.push_str(&format!(
             "<tr class=\"{cls}\"><td class=\"lbl\">{label}{tag}</td><td class=\"mono\">{host}</td>\
-             <td class=\"num\">{p50}</td><td class=\"num\">{p90}</td><td class=\"num\">{p99}</td>\
+             <td class=\"num\">{p50}</td><td class=\"num\">{p99}</td><td class=\"num\">{jitter}</td>\
              <td class=\"num\">{ok}/{samples}</td><td class=\"num\">{slot}</td><td class=\"num\">{lag}</td></tr>",
             cls = if is_best { "best" } else { "" },
             label = html_escape(&r.label),
             tag = tag,
             host = html_escape(&r.host),
             p50 = p50,
-            p90 = p90,
             p99 = p99,
+            jitter = jitter,
             ok = r.ok,
             samples = samples,
             slot = slot,
@@ -113,8 +113,8 @@ tr.best td{background:rgba(197,242,63,.06)}
 <h1>solbench <b>&raquo;</b> live RPC latency</h1>
 <p class="sub">getSlot round-trip, __SAMPLES__ samples/endpoint &middot; auto-refreshes every 10s &middot; times in ms</p>
 <table>
-<thead><tr><th>endpoint</th><th>host</th><th>p50</th><th>p90</th><th>p99</th><th>ok</th><th>slot</th><th>lag</th></tr></thead>
+<thead><tr><th>endpoint</th><th>host</th><th>p50</th><th>p99</th><th>jitter</th><th>ok</th><th>slot</th><th>lag</th></tr></thead>
 <tbody>__ROWS__</tbody>
 </table>
-<p class="foot"><b>Read latency from THIS host.</b> getSlot round-trip is dominated by network distance to the client &mdash; it is <b>not</b> a proxy for transaction-landing or shred/first-seen latency, where co-located infra wins. Run solbench from your trading edge for a meaningful comparison. &middot; lag = slots behind the leading endpoint &middot; lower is better</p>
+<p class="foot"><b>Read latency from THIS host.</b> getSlot round-trip is dominated by network distance to the client &mdash; it is <b>not</b> a proxy for transaction-landing or shred/first-seen latency, where co-located infra wins. Run solbench from your trading edge for a meaningful comparison. &middot; jitter = stddev (consistency) &middot; lag = slots behind the leading endpoint &middot; lower is better</p>
 </div></body></html>"#;
