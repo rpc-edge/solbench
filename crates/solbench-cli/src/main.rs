@@ -1,20 +1,22 @@
 //! `solbench` CLI.
 //!
-//! `probe` measures live RPC latency; `serve` renders it as a local dashboard;
-//! `demo` exercises the measurement core on synthetic data.
+//! `probe` measures live RPC read-latency + slot-lag (open-loop, tick-aligned);
+//! `serve` renders it as a local dashboard; `demo` exercises the measurement core.
+//! `grpc` (feature `grpc`) and `send` (feature `send`) add the infra-reflecting
+//! metrics — see README.
 
 mod probe;
 mod server;
 
 use clap::{Parser, Subcommand};
-use probe::{endpoints_from_env, probe_rpc};
+use probe::{endpoints_from_env, probe_all};
 use solbench_core::LatencyRecorder;
 
 #[derive(Parser)]
 #[command(
     name = "solbench",
     version,
-    about = "Continuous Solana RPC/gRPC/relay benchmark."
+    about = "Provider-neutral Solana RPC/gRPC latency benchmark."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -23,11 +25,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Probe endpoints once and print a latency comparison.
+    /// Probe endpoints (read latency + slot-lag) and print a comparison.
     Probe {
         /// Samples per endpoint.
         #[arg(long, default_value_t = 20)]
         samples: usize,
+        /// Milliseconds between sample ticks (open-loop schedule).
+        #[arg(long, default_value_t = 100)]
+        interval_ms: u64,
         /// Emit raw per-endpoint results as JSON (for CI / reproducible runs).
         #[arg(long)]
         json: bool,
@@ -39,6 +44,9 @@ enum Command {
         /// Samples per endpoint, per page load.
         #[arg(long, default_value_t = 12)]
         samples: usize,
+        /// Milliseconds between sample ticks.
+        #[arg(long, default_value_t = 120)]
+        interval_ms: u64,
     },
     /// Run the measurement pipeline over synthetic samples (demonstrates solbench-core).
     Demo,
@@ -46,12 +54,16 @@ enum Command {
 
 fn main() {
     match Cli::parse().command {
-        Command::Probe { samples, json } => {
+        Command::Probe {
+            samples,
+            interval_ms,
+            json,
+        } => {
             let endpoints = endpoints_from_env();
             if !json && endpoints.iter().all(|e| e.label != "rpc edge") {
                 eprintln!("note: set SOLBENCH_RPCEDGE_URL to include rpc edge in the comparison.");
             }
-            let results: Vec<_> = endpoints.iter().map(|ep| probe_rpc(ep, samples)).collect();
+            let results = probe_all(&endpoints, samples, interval_ms);
 
             if json {
                 println!(
@@ -63,22 +75,27 @@ fn main() {
 
             let ms = |ns: u64| format!("{:.2}", ns as f64 / 1e6);
             println!(
-                "{:<16} {:<26} {:>8} {:>8} {:>8} {:>8} {:>7} {:>12}",
-                "endpoint", "host", "p50ms", "p99ms", "jitter", "max", "ok", "slot"
+                "{:<16} {:<26} {:>8} {:>8} {:>8} {:>7} {:>7} {:>12}",
+                "endpoint", "host", "p50ms", "p99ms", "jitter", "lag", "ok", "slot"
             );
             for r in &results {
-                let (p50, p99, jitter, max) = match &r.latency {
-                    Some(l) => (ms(l.p50_ns), ms(l.p99_ns), ms(l.stddev_ns), ms(l.max_ns)),
-                    None => ("-".into(), "-".into(), "-".into(), "-".into()),
+                let (p50, p99, jitter) = match &r.latency {
+                    Some(l) => (ms(l.p50_ns), ms(l.p99_ns), ms(l.stddev_ns)),
+                    None => ("-".into(), "-".into(), "-".into()),
                 };
+                let lag = r
+                    .slot_lag
+                    .as_ref()
+                    .map(|s| format!("{:.1}", s.avg))
+                    .unwrap_or_else(|| "-".into());
                 println!(
-                    "{:<16} {:<26} {:>8} {:>8} {:>8} {:>8} {:>7} {:>12}",
+                    "{:<16} {:<26} {:>8} {:>8} {:>8} {:>7} {:>7} {:>12}",
                     r.label,
                     r.host,
                     p50,
                     p99,
                     jitter,
-                    max,
+                    lag,
                     format!("{}/{}", r.ok, r.samples),
                     r.current_slot
                         .map(|s| s.to_string())
@@ -86,15 +103,19 @@ fn main() {
                 );
             }
             eprintln!(
-                "\njitter = stddev (consistency); lower is steadier. getSlot round-trip from THIS\n\
-                 host (read latency) - dominated by network distance to the client, NOT a proxy for\n\
-                 tx-landing or shred first-seen latency. Run from your co-located edge for a\n\
-                 comparison that reflects the infra."
+                "\njitter = stddev (consistency); lag = mean slots behind the leading endpoint.\n\
+                 getSlot round-trip is read latency from THIS host - dominated by network distance\n\
+                 to the client, NOT a proxy for tx-landing or shred first-seen latency. Run from your\n\
+                 co-located edge (or build the `grpc` / `send` features) for the infra story."
             );
         }
-        Command::Serve { port, samples } => {
+        Command::Serve {
+            port,
+            samples,
+            interval_ms,
+        } => {
             let endpoints = endpoints_from_env();
-            if let Err(e) = server::serve(endpoints, samples, port) {
+            if let Err(e) = server::serve(endpoints, samples, interval_ms, port) {
                 eprintln!("solbench serve failed: {e}");
                 std::process::exit(1);
             }

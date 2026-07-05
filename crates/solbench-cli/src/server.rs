@@ -4,10 +4,15 @@
 //! every endpoint and renders the result. No framework, no build step; just the
 //! `solbench` binary.
 
-use crate::probe::{probe_rpc, Endpoint, ProbeResult};
+use crate::probe::{probe_all, Endpoint, ProbeResult};
 use tiny_http::{Header, Response, Server};
 
-pub fn serve(endpoints: Vec<Endpoint>, samples: usize, port: u16) -> std::io::Result<()> {
+pub fn serve(
+    endpoints: Vec<Endpoint>,
+    samples: usize,
+    interval_ms: u64,
+    port: u16,
+) -> std::io::Result<()> {
     let server =
         Server::http(("127.0.0.1", port)).map_err(|e| std::io::Error::other(e.to_string()))?;
     println!("solbench dashboard: http://127.0.0.1:{port}  (Ctrl-C to stop)");
@@ -17,7 +22,7 @@ pub fn serve(endpoints: Vec<Endpoint>, samples: usize, port: u16) -> std::io::Re
             let _ = request.respond(Response::empty(404));
             continue;
         }
-        let results: Vec<ProbeResult> = endpoints.iter().map(|e| probe_rpc(e, samples)).collect();
+        let results = probe_all(&endpoints, samples, interval_ms);
         let html = render(&results, samples);
         let header = Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..])
             .expect("valid header");
@@ -42,7 +47,6 @@ fn render(results: &[ProbeResult], samples: usize) -> String {
         .filter_map(|r| r.latency.as_ref().map(|l| (r.host.clone(), l.p50_ns)))
         .min_by_key(|(_, p)| *p)
         .map(|(h, _)| h);
-    let max_slot = results.iter().filter_map(|r| r.current_slot).max();
 
     let mut rows = String::new();
     for r in results {
@@ -55,10 +59,11 @@ fn render(results: &[ProbeResult], samples: usize) -> String {
             .current_slot
             .map(|s| s.to_string())
             .unwrap_or_else(|| "-".into());
-        let lag = match (r.current_slot, max_slot) {
-            (Some(s), Some(m)) => (m as i64 - s as i64).to_string(),
-            _ => "-".into(),
-        };
+        let lag = r
+            .slot_lag
+            .as_ref()
+            .map(|s| format!("{:.1}", s.avg))
+            .unwrap_or_else(|| "-".into());
         let tag = if is_best {
             " <span class=\"tag\">fastest p50</span>"
         } else {
