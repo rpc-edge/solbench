@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# env / secrets — never commit
+.env
+.env.*
+*.keypair
+id.json

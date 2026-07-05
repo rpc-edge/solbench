@@ -1,0 +1,18 @@
+[package]
+name = "solbench"
+description = "Continuous Solana RPC/gRPC/relay benchmark: landing rate under congestion, p50/p99 first-seen delta, slot lag, and stream freshness."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "solbench"
+path = "src/main.rs"
+
+[dependencies]
+solbench-core = { path = "../solbench-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
