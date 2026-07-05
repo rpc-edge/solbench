@@ -44,5 +44,5 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      # `send` pulls solana-sdk; keep it compiling + lint-clean.
-      - run: cargo clippy --all-targets --features send -- -D warnings
+      # `send` pulls solana-sdk, `grpc` pulls yellowstone/tonic; keep both lint-clean.
+      - run: cargo clippy --all-targets --features "send grpc" -- -D warnings

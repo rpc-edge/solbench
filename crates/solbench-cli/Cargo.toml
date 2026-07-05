@@ -14,9 +14,7 @@ path = "src/main.rs"
 [features]
 # Opt-in, heavier metrics. Default build stays lean (ureq + tiny_http only).
 send = ["dep:solana-sdk", "dep:bincode", "dep:base64"]
-# NOTE: a `grpc` feature (Yellowstone first-seen) is intended but currently blocked:
-# yellowstone-grpc-proto and solana-sdk pull an unresolvable zeroize/ed25519-dalek
-# version conflict. Needs a pinned-compatible solana/yellowstone matrix. See README.
+grpc = ["dep:yellowstone-grpc-client", "dep:yellowstone-grpc-proto", "dep:tokio", "dep:futures-util"]
 
 [dependencies]
 solbench-core = { path = "../solbench-core" }
@@ -30,3 +28,9 @@ tiny_http = { workspace = true }
 solana-sdk = { version = "2", optional = true }
 bincode = { version = "1", optional = true }
 base64 = { version = "0.22", optional = true }
+
+# feature `grpc` (yellowstone 12.x no longer pulls monolithic solana-sdk)
+yellowstone-grpc-client = { version = "12", optional = true }
+yellowstone-grpc-proto = { version = "12", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"], optional = true }
+futures-util = { version = "0.3", optional = true }

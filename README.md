@@ -35,13 +35,8 @@ per-sample data (CI regression / reproducible runs).
 | Open-loop sampling (no coordinated omission) | ✅ now | each tick sends independently; a slow reply never hides the next sample |
 | Slot freshness / lag (slots behind the leading endpoint) | ✅ now | tick-aligned, fair same-moment comparison |
 | Transaction landing rate + slots-to-land | ✅ `--features send` | actual on-chain inclusion (not `sendTransaction`-returned-success) |
-| Yellowstone gRPC first-seen delta (concurrent two-endpoint race) | 🚧 blocked | see below — a Solana/Yellowstone dependency conflict |
+| Yellowstone gRPC first-seen delta (concurrent two-endpoint race) | ✅ `--features grpc` | the metric that reflects co-located infra; never `blockTime` |
 | Per-method matrix (`getAccountInfo`, `getMultipleAccounts`, …) | ⏳ roadmap | |
-
-> **gRPC first-seen is designed but not yet buildable.** `yellowstone-grpc-proto` and `solana-sdk`
-> currently pull an unresolvable `zeroize`/`ed25519-dalek` version conflict; it needs a
-> pinned-compatible solana/yellowstone matrix. The `solbench grpc` subcommand exists and reports
-> this. It's the metric that best reflects co-located infra, so it's the top roadmap item.
 
 **Honesty first (it's the whole point):** `getSlot` round-trip is *read latency from the host
 running solbench*, dominated by network distance to the client. A globally-CDN'd public RPC will
@@ -84,6 +79,17 @@ SOLBENCH_KEYPAIR=~/devnet.json \
   solbench send --url https://api.devnet.solana.com --count 10
 ```
 
+**gRPC first-seen** (opt-in, pulls `yellowstone-grpc`) — races two Yellowstone endpoints on which
+sees each `(slot, status)` event first, and by how much. This is the streaming metric that reflects
+co-located infra (a relative two-endpoint race — never `receive_time - blockTime`):
+
+```sh
+cargo build --release --features grpc
+SOLBENCH_GRPC_A=https://grpc.rpcedge.com:443          SOLBENCH_GRPC_A_TOKEN=… \
+SOLBENCH_GRPC_B=https://frankfurt.grpc.rpcedge.com:443 SOLBENCH_GRPC_B_TOKEN=… \
+  solbench grpc --slots 200
+```
+
 By default solbench probes a public mainnet baseline. Add any authenticated endpoint via the
 environment — the full URL (including `?api-key=`) is read at runtime and **never committed or
 logged** (only the host is shown):
@@ -108,9 +114,9 @@ SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" solbench probe
   infra provider that may appear in results. Endpoints are configured identically; the harness and
   raw JSON are open so anyone can reproduce. A non-reproducible score is a self-reported claim —
   run your own.
-- **Known limits today:** read-latency is network-inclusive (run co-located to reflect infra);
-  gRPC first-seen is blocked on a dependency conflict (above); exact percentiles (no HDR histogram
-  yet); public endpoints may rate-limit under high `--samples`.
+- **Known limits today:** `probe` read-latency is network-inclusive (run co-located, or use `grpc`/
+  `send`, to reflect infra); exact percentiles (no HDR histogram yet); public endpoints may
+  rate-limit under high `--samples`.
 
 ## Roadmap
 
@@ -120,8 +126,8 @@ Ordered by how much they close the gap to "what traders actually trade on":
 2. **Open-loop sampling** (no coordinated omission) — ✅ done.
 3. **Slot-lag / freshness** tracker per endpoint — ✅ done.
 4. **Landing-rate `send`** (on-chain inclusion) — ✅ done (`--features send`).
-5. **Yellowstone gRPC first-seen** (concurrent two-endpoint race; never `blockTime`) — 🚧 blocked on
-   the solana/yellowstone `zeroize` conflict; top priority once a compatible matrix exists.
+5. **Yellowstone gRPC first-seen** (concurrent two-endpoint race; never `blockTime`) — ✅ done
+   (`--features grpc`).
 6. **Per-method latency matrix**; HDR histograms; crates.io publish + prebuilt binaries (cargo-dist).
 
 ## How it's built
