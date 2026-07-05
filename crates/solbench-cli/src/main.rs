@@ -2,10 +2,12 @@
 //!
 //! `probe` measures live RPC read-latency + slot-lag (open-loop, tick-aligned);
 //! `serve` renders it as a local dashboard; `demo` exercises the measurement core.
-//! `grpc` (feature `grpc`) and `send` (feature `send`) add the infra-reflecting
-//! metrics — see README.
+//! `grpc` (feature `grpc`) races Yellowstone first-seen and `send` (feature `send`)
+//! measures transaction landing — the metrics that reflect co-located infra.
 
+mod grpc;
 mod probe;
+mod send;
 mod server;
 
 use clap::{Parser, Subcommand};
@@ -47,6 +49,30 @@ enum Command {
         /// Milliseconds between sample ticks.
         #[arg(long, default_value_t = 120)]
         interval_ms: u64,
+    },
+    /// Race two Yellowstone gRPC endpoints on slot first-seen (feature `grpc`).
+    ///
+    /// Endpoints come from SOLBENCH_GRPC_A / SOLBENCH_GRPC_B (`host:443` or URL);
+    /// per-endpoint x-token from SOLBENCH_GRPC_A_TOKEN / _B_TOKEN.
+    Grpc {
+        /// Slot updates to observe before reporting.
+        #[arg(long, default_value_t = 200)]
+        slots: usize,
+    },
+    /// Measure transaction landing (submit -> on-chain inclusion) (feature `send`).
+    ///
+    /// DEVNET-first. rpc edge is mainnet-only, and mainnet keypairs should live on
+    /// your own secure host, not in CI. Never commit a keypair.
+    Send {
+        /// Path to a keypair JSON file (else SOLBENCH_KEYPAIR).
+        #[arg(long)]
+        keypair: Option<String>,
+        /// RPC URL to submit through (else SOLBENCH_SEND_URL; defaults to devnet).
+        #[arg(long)]
+        url: Option<String>,
+        /// Number of transactions to send.
+        #[arg(long, default_value_t = 10)]
+        count: usize,
     },
     /// Run the measurement pipeline over synthetic samples (demonstrates solbench-core).
     Demo,
@@ -105,8 +131,8 @@ fn main() {
             eprintln!(
                 "\njitter = stddev (consistency); lag = mean slots behind the leading endpoint.\n\
                  getSlot round-trip is read latency from THIS host - dominated by network distance\n\
-                 to the client, NOT a proxy for tx-landing or shred first-seen latency. Run from your\n\
-                 co-located edge (or build the `grpc` / `send` features) for the infra story."
+                 to the client, NOT a proxy for tx-landing or shred first-seen latency. Use\n\
+                 `solbench grpc` / `solbench send` (or run co-located) for the infra story."
             );
         }
         Command::Serve {
@@ -117,6 +143,22 @@ fn main() {
             let endpoints = endpoints_from_env();
             if let Err(e) = server::serve(endpoints, samples, interval_ms, port) {
                 eprintln!("solbench serve failed: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Grpc { slots } => {
+            if let Err(e) = grpc::race(slots) {
+                eprintln!("solbench grpc: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Send {
+            keypair,
+            url,
+            count,
+        } => {
+            if let Err(e) = send::run(keypair, url, count) {
+                eprintln!("solbench send: {e}");
                 std::process::exit(1);
             }
         }

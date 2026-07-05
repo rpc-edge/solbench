@@ -32,10 +32,16 @@ per-sample data (CI regression / reproducible runs).
 | Metric | Status | Note |
 |---|---|---|
 | Read latency (`getSlot` round-trip): p50/p90/p99/**p99.9**, jitter, max | ✅ now | **network-inclusive** — dominated by distance from *your host* to the endpoint |
-| Slot freshness / lag (slots behind the leading endpoint) | ✅ now | relative, from the same host |
-| Transaction landing rate + time-to-land | ⏳ roadmap | the metric traders actually optimize |
-| Yellowstone gRPC first-seen delta (concurrent two-endpoint race) | ⏳ roadmap | rpc edge's real differentiator |
+| Open-loop sampling (no coordinated omission) | ✅ now | each tick sends independently; a slow reply never hides the next sample |
+| Slot freshness / lag (slots behind the leading endpoint) | ✅ now | tick-aligned, fair same-moment comparison |
+| Transaction landing rate + slots-to-land | ✅ `--features send` | actual on-chain inclusion (not `sendTransaction`-returned-success) |
+| Yellowstone gRPC first-seen delta (concurrent two-endpoint race) | 🚧 blocked | see below — a Solana/Yellowstone dependency conflict |
 | Per-method matrix (`getAccountInfo`, `getMultipleAccounts`, …) | ⏳ roadmap | |
+
+> **gRPC first-seen is designed but not yet buildable.** `yellowstone-grpc-proto` and `solana-sdk`
+> currently pull an unresolvable `zeroize`/`ed25519-dalek` version conflict; it needs a
+> pinned-compatible solana/yellowstone matrix. The `solbench grpc` subcommand exists and reports
+> this. It's the metric that best reflects co-located infra, so it's the top roadmap item.
 
 **Honesty first (it's the whole point):** `getSlot` round-trip is *read latency from the host
 running solbench*, dominated by network distance to the client. A globally-CDN'd public RPC will
@@ -61,11 +67,21 @@ cargo build --release   # ./target/release/solbench
 ## Usage
 
 ```sh
-solbench probe                 # probe once, print a comparison table
-solbench probe --samples 50    # more samples for tighter percentiles
-solbench probe --json          # raw per-endpoint results as JSON
-solbench serve                 # live dashboard at http://127.0.0.1:8787
-solbench demo                  # measurement pipeline over synthetic data
+solbench probe                   # read latency + jitter + slot-lag, one table
+solbench probe --samples 50      # more samples for tighter percentiles
+solbench probe --interval-ms 150 # open-loop tick cadence (>= typical RTT)
+solbench probe --json            # raw per-endpoint results as JSON
+solbench serve                   # live dashboard at http://127.0.0.1:8787
+solbench demo                    # measurement pipeline over synthetic data
+```
+
+**Transaction landing** (opt-in, pulls `solana-sdk`) — measures actual on-chain inclusion.
+DEVNET-first; point it at mainnet only with your own funded keypair on your own host (never CI):
+
+```sh
+cargo build --release --features send
+SOLBENCH_KEYPAIR=~/devnet.json \
+  solbench send --url https://api.devnet.solana.com --count 10
 ```
 
 By default solbench probes a public mainnet baseline. Add any authenticated endpoint via the
@@ -80,27 +96,33 @@ SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" solbench probe
 
 - **Distributions, not averages.** p50/p90/p99/p99.9 + stddev (jitter); the tail is what trading
   cares about.
+- **Open-loop sampling.** Each sample tick fires its own request on a fixed schedule, so a slow
+  reply never delays (and never hides) the next one — the standard fix for coordinated omission.
 - **Monotonic clocks** for every duration (no NTP skew).
-- **Host-relative, same-vantage comparison.** All endpoints are probed from the same host at the
-  same time, so shared network conditions are common to every row — but absolute numbers still
-  include the RTT from *that host*. Report your measurement region when you publish a run.
+- **Host-relative, same-vantage comparison.** All endpoints are probed from the same host on the
+  same tick schedule, so shared network conditions are common to every row — but absolute numbers
+  still include the RTT from *that host*. Report your measurement region when you publish a run.
+- **On-chain inclusion for landing.** `send` waits for `getSignatureStatuses` to confirm, never
+  treating a `sendTransaction` success as "landed."
 - **Operator disclosure.** solbench is maintained by [rpc edge](https://rpcedge.com), a Solana
   infra provider that may appear in results. Endpoints are configured identically; the harness and
   raw JSON are open so anyone can reproduce. A non-reproducible score is a self-reported claim —
   run your own.
-- **Known limits today:** read-latency only (no landing/first-seen yet); no open-loop load model or
-  HDR histograms yet (see roadmap); public endpoints may rate-limit under high `--samples`.
+- **Known limits today:** read-latency is network-inclusive (run co-located to reflect infra);
+  gRPC first-seen is blocked on a dependency conflict (above); exact percentiles (no HDR histogram
+  yet); public endpoints may rate-limit under high `--samples`.
 
 ## Roadmap
 
 Ordered by how much they close the gap to "what traders actually trade on":
 
-1. **Jitter/consistency + p99.9** as first-class output — *done*.
-2. **Slot-lag / freshness** tracker per endpoint.
-3. **Yellowstone gRPC first-seen** mode (concurrent two-endpoint race; never `blockTime`).
-4. **Landing-rate `send`** command (on-chain inclusion, not `sendTransaction`-returned-success).
-5. **Per-method latency matrix.**
-6. Open-loop sampling + HDR histograms; crates.io publish + prebuilt binaries (cargo-dist).
+1. **Jitter/consistency + p99.9** as first-class output — ✅ done.
+2. **Open-loop sampling** (no coordinated omission) — ✅ done.
+3. **Slot-lag / freshness** tracker per endpoint — ✅ done.
+4. **Landing-rate `send`** (on-chain inclusion) — ✅ done (`--features send`).
+5. **Yellowstone gRPC first-seen** (concurrent two-endpoint race; never `blockTime`) — 🚧 blocked on
+   the solana/yellowstone `zeroize` conflict; top priority once a compatible matrix exists.
+6. **Per-method latency matrix**; HDR histograms; crates.io publish + prebuilt binaries (cargo-dist).
 
 ## How it's built
 

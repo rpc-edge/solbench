@@ -1,6 +1,6 @@
 [package]
 name = "solbench"
-description = "Continuous Solana RPC/gRPC/relay benchmark: landing rate under congestion, p50/p99 first-seen delta, slot lag, and stream freshness."
+description = "Continuous Solana RPC/gRPC/relay benchmark: read latency, jitter, slot-lag, gRPC first-seen, and transaction landing."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,6 +11,13 @@ authors.workspace = true
 name = "solbench"
 path = "src/main.rs"
 
+[features]
+# Opt-in, heavier metrics. Default build stays lean (ureq + tiny_http only).
+send = ["dep:solana-sdk", "dep:bincode", "dep:base64"]
+# NOTE: a `grpc` feature (Yellowstone first-seen) is intended but currently blocked:
+# yellowstone-grpc-proto and solana-sdk pull an unresolvable zeroize/ed25519-dalek
+# version conflict. Needs a pinned-compatible solana/yellowstone matrix. See README.
+
 [dependencies]
 solbench-core = { path = "../solbench-core" }
 serde = { workspace = true }
@@ -18,3 +25,8 @@ serde_json = { workspace = true }
 clap = { workspace = true }
 ureq = { workspace = true }
 tiny_http = { workspace = true }
+
+# feature `send`
+solana-sdk = { version = "2", optional = true }
+bincode = { version = "1", optional = true }
+base64 = { version = "0.22", optional = true }

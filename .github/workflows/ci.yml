@@ -34,3 +34,15 @@ jobs:
         run: cargo test --all
       - name: build
         run: cargo build --release
+
+  features:
+    name: feature builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # `send` pulls solana-sdk; keep it compiling + lint-clean.
+      - run: cargo clippy --all-targets --features send -- -D warnings
