@@ -16,3 +16,5 @@ solbench-core = { path = "../solbench-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
+ureq = { workspace = true }
+tiny_http = { workspace = true }

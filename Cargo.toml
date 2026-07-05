@@ -14,3 +14,5 @@ authors = ["0xNyk"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
+ureq = "2"
+tiny_http = "0.12"
