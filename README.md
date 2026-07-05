@@ -67,7 +67,17 @@ solbench probe --samples 50      # more samples for tighter percentiles
 solbench probe --interval-ms 150 # open-loop tick cadence (>= typical RTT)
 solbench probe --json            # raw per-endpoint results as JSON
 solbench serve                   # live dashboard at http://127.0.0.1:8787
+solbench report --region "…"     # leaderboard-shaped JSON for a hosted board
 solbench demo                    # measurement pipeline over synthetic data
+```
+
+`report` emits the JSON a hosted leaderboard renders (read latency + slot-lag per provider;
+`firstSeenP50`/`landingRate` filled from separate `grpc`/`send` runs). Add rivals with
+`--provider "Name=https://…"`. Run it co-located and publish on a cron:
+
+```sh
+SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" \
+  solbench report --region "Frankfurt · Equinix FR13" --window "rolling 24h" > run.json
 ```
 
 **Transaction landing** (opt-in, pulls `solana-sdk`) — measures actual on-chain inclusion.

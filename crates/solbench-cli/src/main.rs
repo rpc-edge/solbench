@@ -7,6 +7,7 @@
 
 mod grpc;
 mod probe;
+mod report;
 mod send;
 mod server;
 
@@ -73,6 +74,23 @@ enum Command {
         /// Number of transactions to send.
         #[arg(long, default_value_t = 10)]
         count: usize,
+    },
+    /// Emit a leaderboard-shaped JSON run (feeds rpcedge.com/benchmarks/live).
+    Report {
+        /// Measurement region label (else SOLBENCH_REGION).
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long, default_value = "mainnet")]
+        network: String,
+        #[arg(long, default_value = "single run")]
+        window: String,
+        /// Extra provider to measure, "name=url" (repeatable).
+        #[arg(long = "provider")]
+        providers: Vec<String>,
+        #[arg(long, default_value_t = 20)]
+        samples: usize,
+        #[arg(long, default_value_t = 100)]
+        interval_ms: u64,
     },
     /// Run the measurement pipeline over synthetic samples (demonstrates solbench-core).
     Demo,
@@ -159,6 +177,19 @@ fn main() {
         } => {
             if let Err(e) = send::run(keypair, url, count) {
                 eprintln!("solbench send: {e}");
+                std::process::exit(1);
+            }
+        }
+        Command::Report {
+            region,
+            network,
+            window,
+            providers,
+            samples,
+            interval_ms,
+        } => {
+            if let Err(e) = report::run(region, network, window, providers, samples, interval_ms) {
+                eprintln!("solbench report: {e}");
                 std::process::exit(1);
             }
         }
