@@ -36,7 +36,7 @@ per-sample data (CI regression / reproducible runs).
 | Slot freshness / lag (slots behind the leading endpoint) | ✅ now | tick-aligned, fair same-moment comparison |
 | Transaction landing rate + slots-to-land | ✅ `--features send` | actual on-chain inclusion (not `sendTransaction`-returned-success) |
 | Yellowstone gRPC first-seen delta (concurrent two-endpoint race) | ✅ `--features grpc` | the metric that reflects co-located infra; never `blockTime` |
-| Per-method matrix (`getAccountInfo`, `getMultipleAccounts`, …) | ⏳ roadmap | |
+| Per-method matrix (`getSlot`/`getVersion`/`getLatestBlockhash`/`getAccountInfo`/`getMultipleAccounts`) | ✅ now | `solbench methods`; network-inclusive per-method round-trip |
 
 **Honesty first (it's the whole point):** `getSlot` round-trip is *read latency from the host
 running solbench*, dominated by network distance to the client. A globally-CDN'd public RPC will
@@ -66,6 +66,7 @@ solbench probe                   # read latency + jitter + slot-lag, one table
 solbench probe --samples 50      # more samples for tighter percentiles
 solbench probe --interval-ms 150 # open-loop tick cadence (>= typical RTT)
 solbench probe --json            # raw per-endpoint results as JSON
+solbench methods                 # per-method read-latency matrix (add --json)
 solbench serve                   # live dashboard at http://127.0.0.1:8787
 solbench report --region "…"     # leaderboard-shaped JSON for a hosted board
 solbench demo                    # measurement pipeline over synthetic data
@@ -138,7 +139,8 @@ Ordered by how much they close the gap to "what traders actually trade on":
 4. **Landing-rate `send`** (on-chain inclusion) — ✅ done (`--features send`).
 5. **Yellowstone gRPC first-seen** (concurrent two-endpoint race; never `blockTime`) — ✅ done
    (`--features grpc`).
-6. **Per-method latency matrix**; HDR histograms; crates.io publish + prebuilt binaries (cargo-dist).
+6. **Per-method latency matrix** (`solbench methods`) — ✅ done.
+7. **HDR histograms**; crates.io publish + prebuilt binaries (cargo-dist).
 
 ## How it's built
 

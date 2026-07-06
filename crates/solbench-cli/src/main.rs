@@ -1,7 +1,8 @@
 //! `solbench` CLI.
 //!
 //! `probe` measures live RPC read-latency + slot-lag (open-loop, tick-aligned);
-//! `serve` renders it as a local dashboard; `demo` exercises the measurement core.
+//! `methods` measures a per-method read-latency matrix; `serve` renders a local
+//! dashboard; `demo` exercises the measurement core.
 //! `grpc` (feature `grpc`) races Yellowstone first-seen and `send` (feature `send`)
 //! measures transaction landing — the metrics that reflect co-located infra.
 
