@@ -31,8 +31,14 @@ pub fn method_specs(account: &str) -> Vec<MethodSpec> {
         body: v.to_string(),
     };
     vec![
-        mk("getSlot", json!({"jsonrpc":"2.0","id":1,"method":"getSlot"})),
-        mk("getVersion", json!({"jsonrpc":"2.0","id":1,"method":"getVersion"})),
+        mk(
+            "getSlot",
+            json!({"jsonrpc":"2.0","id":1,"method":"getSlot"}),
+        ),
+        mk(
+            "getVersion",
+            json!({"jsonrpc":"2.0","id":1,"method":"getVersion"}),
+        ),
         mk(
             "getLatestBlockhash",
             json!({"jsonrpc":"2.0","id":1,"method":"getLatestBlockhash"}),

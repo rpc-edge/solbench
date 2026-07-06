@@ -306,14 +306,9 @@ mod tests {
         let samples = 4;
         let (url, handle) = serve_canned("not json", samples);
         let t0 = Instant::now() + Duration::from_millis(50);
-        let out = sample_endpoint(
-            &url,
-            "{}",
-            samples,
-            Duration::from_millis(10),
-            t0,
-            |v| v.get("result").and_then(|r| r.as_u64()),
-        );
+        let out = sample_endpoint(&url, "{}", samples, Duration::from_millis(10), t0, |v| {
+            v.get("result").and_then(|r| r.as_u64())
+        });
         assert_eq!(out.errors, samples);
         assert_eq!(out.rec.len(), 0);
         handle.join().unwrap();
