@@ -6,12 +6,14 @@
 //! measures transaction landing — the metrics that reflect co-located infra.
 
 mod grpc;
+mod methods;
 mod probe;
 mod report;
 mod send;
 mod server;
 
 use clap::{Parser, Subcommand};
+use methods::{method_specs, probe_methods, CLOCK};
 use probe::{endpoints_from_env, probe_all};
 use solbench_core::LatencyRecorder;
 
@@ -37,6 +39,22 @@ enum Command {
         #[arg(long, default_value_t = 100)]
         interval_ms: u64,
         /// Emit raw per-endpoint results as JSON (for CI / reproducible runs).
+        #[arg(long)]
+        json: bool,
+    },
+    /// Per-method read-latency matrix across endpoints (getSlot, getVersion,
+    /// getLatestBlockhash, getAccountInfo, getMultipleAccounts).
+    Methods {
+        /// Samples per method per endpoint.
+        #[arg(long, default_value_t = 20)]
+        samples: usize,
+        /// Milliseconds between sample ticks (open-loop schedule).
+        #[arg(long, default_value_t = 100)]
+        interval_ms: u64,
+        /// getAccountInfo target account (default: Clock sysvar).
+        #[arg(long)]
+        account: Option<String>,
+        /// Emit the matrix as JSON.
         #[arg(long)]
         json: bool,
     },
@@ -151,6 +169,58 @@ fn main() {
                  getSlot round-trip is read latency from THIS host - dominated by network distance\n\
                  to the client, NOT a proxy for tx-landing or shred first-seen latency. Use\n\
                  `solbench grpc` / `solbench send` (or run co-located) for the infra story."
+            );
+        }
+        Command::Methods {
+            samples,
+            interval_ms,
+            account,
+            json,
+        } => {
+            let endpoints = endpoints_from_env();
+            if !json && endpoints.iter().all(|e| e.label != "rpc edge") {
+                eprintln!("note: set SOLBENCH_RPCEDGE_URL to include rpc edge in the comparison.");
+            }
+            let account = account.unwrap_or_else(|| CLOCK.to_string());
+            let specs = method_specs(&account);
+            let reports = probe_methods(&endpoints, &specs, samples, interval_ms);
+
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&reports).expect("reports serialize")
+                );
+                return;
+            }
+
+            let ms = |ns: u64| format!("{:.2}", ns as f64 / 1e6);
+            println!(
+                "{:<20} {:<16} {:<26} {:>8} {:>8} {:>8} {:>8}",
+                "method", "endpoint", "host", "p50ms", "p99ms", "jitter", "ok"
+            );
+            for report in &reports {
+                for r in &report.results {
+                    let (p50, p99, jitter) = match &r.latency {
+                        Some(l) => (ms(l.p50_ns), ms(l.p99_ns), ms(l.stddev_ns)),
+                        None => ("-".into(), "-".into(), "-".into()),
+                    };
+                    println!(
+                        "{:<20} {:<16} {:<26} {:>8} {:>8} {:>8} {:>8}",
+                        report.method,
+                        r.label,
+                        r.host,
+                        p50,
+                        p99,
+                        jitter,
+                        format!("{}/{}", r.ok, samples),
+                    );
+                }
+            }
+            eprintln!(
+                "\nper-method latency is a network-inclusive round-trip from THIS host. Compare\n\
+                 endpoints WITHIN a method; read cross-method gaps as relative method cost, not\n\
+                 infra. Methods run in sequence, so a run may span changing network conditions.\n\
+                 getAccountInfo / getMultipleAccounts hit fixed Solana sysvar accounts."
             );
         }
         Command::Serve {
