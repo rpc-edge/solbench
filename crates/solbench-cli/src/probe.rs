@@ -47,7 +47,7 @@ pub struct ProbeResult {
 
 /// Host portion of a URL with any credentials/query stripped
 /// (`https://rpc.rpcedge.com/?api-key=...` -> `rpc.rpcedge.com`).
-fn redact_host(url: &str) -> String {
+pub(crate) fn redact_host(url: &str) -> String {
     let no_scheme = url.split("://").nth(1).unwrap_or(url);
     no_scheme
         .split(['/', '?'])
@@ -67,20 +67,40 @@ struct Raw {
     slots: Vec<(usize, u64)>,
 }
 
+/// Output of one open-loop sampling run over a single endpoint.
+pub(crate) struct SampleOutput {
+    pub rec: LatencyRecorder,
+    pub errors: usize,
+    /// (tick, extracted value) for each successful sample, tick-sorted.
+    pub extracted: Vec<(usize, u64)>,
+}
+
 /// Sample one endpoint `samples` times on the shared tick schedule starting at `t0`.
 ///
 /// True open-loop: each tick spawns its own request worker, so a slow reply never
 /// delays the next send (no coordinated omission). Latency is the actual send->reply
-/// round-trip; the shared `agent` pools warm connections across workers.
-fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) -> Raw {
+/// round-trip; the shared `agent` pools warm connections across workers. `extract`
+/// maps a parsed JSON-RPC response to `Some(value)` on success (value is an optional
+/// numeric payload such as a slot; use 0 when unused) or `None` to count an error.
+pub(crate) fn sample_endpoint<F>(
+    url: &str,
+    body: &str,
+    samples: usize,
+    interval: Duration,
+    t0: Instant,
+    extract: F,
+) -> SampleOutput
+where
+    F: Fn(&serde_json::Value) -> Option<u64> + Sync,
+{
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(6))
         .build();
-    let body = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot"}"#;
 
-    // (tick, latency_ns, slot) for successful samples; separate error counter.
+    // (tick, latency_ns, extracted value) for successful samples; separate error counter.
     let ok: Arc<Mutex<Vec<(usize, u64, u64)>>> = Arc::new(Mutex::new(Vec::new()));
     let errors = Arc::new(Mutex::new(0usize));
+    let extract = &extract;
 
     thread::scope(|scope| {
         for i in 0..samples {
@@ -90,7 +110,7 @@ fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) 
                 thread::sleep(intended - now);
             }
             let agent = agent.clone();
-            let url = ep.url.clone();
+            let url = url.to_string();
             let ok = Arc::clone(&ok);
             let errors = Arc::clone(&errors);
             scope.spawn(move || {
@@ -106,9 +126,11 @@ fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) 
                             .into_string()
                             .ok()
                             .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-                            .and_then(|v| v.get("result").and_then(|r| r.as_u64()))
                         {
-                            Some(slot) => ok.lock().unwrap().push((i, latency_ns, slot)),
+                            Some(v) => match extract(&v) {
+                                Some(val) => ok.lock().unwrap().push((i, latency_ns, val)),
+                                None => *errors.lock().unwrap() += 1,
+                            },
                             None => *errors.lock().unwrap() += 1,
                         }
                     }
@@ -123,21 +145,34 @@ fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) 
     data.sort_by_key(|&(tick, _, _)| tick);
 
     let mut rec = LatencyRecorder::with_capacity(data.len());
-    let mut slots = Vec::with_capacity(data.len());
-    let mut last_slot = None;
-    for &(tick, latency_ns, slot) in &data {
+    let mut extracted = Vec::with_capacity(data.len());
+    for &(tick, latency_ns, val) in &data {
         rec.record_ns(latency_ns);
-        slots.push((tick, slot));
-        last_slot = Some(slot); // data is tick-sorted, so this ends on the latest
+        extracted.push((tick, val));
     }
 
+    SampleOutput {
+        rec,
+        errors,
+        extracted,
+    }
+}
+
+/// Sample one endpoint's `getSlot` read latency and capture per-tick slots for slot-lag.
+fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) -> Raw {
+    const GET_SLOT: &str = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot"}"#;
+    let out = sample_endpoint(&ep.url, GET_SLOT, samples, interval, t0, |v| {
+        v.get("result").and_then(|r| r.as_u64())
+    });
+    // `extracted` is tick-sorted, so the last entry is the latest slot.
+    let last_slot = out.extracted.last().map(|&(_, slot)| slot);
     Raw {
         label: ep.label.clone(),
         host: redact_host(&ep.url),
-        rec,
-        errors,
+        rec: out.rec,
+        errors: out.errors,
         last_slot,
-        slots,
+        slots: out.extracted,
     }
 }
 
@@ -222,4 +257,73 @@ pub fn endpoints_from_env() -> Vec<Endpoint> {
         url: "https://api.mainnet-beta.solana.com".into(),
     });
     endpoints
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tiny_http::{Response, Server};
+
+    /// Serve exactly `count` requests with a fixed body, then stop. Returns the URL.
+    fn serve_canned(body: &'static str, count: usize) -> (String, thread::JoinHandle<()>) {
+        let server = Server::http("127.0.0.1:0").unwrap();
+        let port = server.server_addr().to_ip().unwrap().port();
+        let url = format!("http://127.0.0.1:{port}/");
+        let handle = thread::spawn(move || {
+            for _ in 0..count {
+                match server.recv() {
+                    Ok(req) => {
+                        let _ = req.respond(Response::from_string(body));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        (url, handle)
+    }
+
+    #[test]
+    fn sample_endpoint_records_latency_and_extracts_value() {
+        let samples = 5;
+        let (url, handle) = serve_canned(r#"{"jsonrpc":"2.0","id":1,"result":123}"#, samples);
+        let t0 = Instant::now() + Duration::from_millis(50);
+        let out = sample_endpoint(
+            &url,
+            r#"{"jsonrpc":"2.0","id":1,"method":"getSlot"}"#,
+            samples,
+            Duration::from_millis(10),
+            t0,
+            |v| v.get("result").and_then(|r| r.as_u64()),
+        );
+        assert_eq!(out.rec.len(), samples);
+        assert_eq!(out.errors, 0);
+        assert!(out.extracted.iter().all(|&(_, v)| v == 123));
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn sample_endpoint_counts_malformed_as_errors() {
+        let samples = 4;
+        let (url, handle) = serve_canned("not json", samples);
+        let t0 = Instant::now() + Duration::from_millis(50);
+        let out = sample_endpoint(
+            &url,
+            "{}",
+            samples,
+            Duration::from_millis(10),
+            t0,
+            |v| v.get("result").and_then(|r| r.as_u64()),
+        );
+        assert_eq!(out.errors, samples);
+        assert_eq!(out.rec.len(), 0);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn redact_host_strips_credentials() {
+        assert_eq!(
+            redact_host("https://rpc.rpcedge.com/?api-key=secret"),
+            "rpc.rpcedge.com"
+        );
+    }
 }
