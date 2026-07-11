@@ -1,0 +1,7 @@
+transactions = 50000
+account_include = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
+private = true
+rpcedge_endpoint_env = "SOLBENCH_RPCEDGE_GRPC_URL"
+rpcedge_token_env = "SOLBENCH_RPCEDGE_GRPC_TOKEN"
+triton_endpoint_env = "SOLBENCH_TRITON_GRPC_URL"
+triton_token_env = "SOLBENCH_TRITON_GRPC_TOKEN"

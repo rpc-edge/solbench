@@ -10,6 +10,7 @@ mod probe;
 mod report;
 mod send;
 mod server;
+mod stream;
 
 use clap::{Parser, Subcommand};
 use probe::{endpoints_from_env, probe_all};
@@ -28,6 +29,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Run, verify, and report bounded transaction-stream races.
+    Stream {
+        #[command(subcommand)]
+        command: stream::StreamCommand,
+    },
     /// Probe endpoints (read latency + slot-lag) and print a comparison.
     Probe {
         /// Samples per endpoint.
@@ -98,6 +104,12 @@ enum Command {
 
 fn main() {
     match Cli::parse().command {
+        Command::Stream { command } => {
+            if let Err(error) = stream::execute(command) {
+                eprintln!("solbench stream: {error:#}");
+                std::process::exit(1);
+            }
+        }
         Command::Probe {
             samples,
             interval_ms,

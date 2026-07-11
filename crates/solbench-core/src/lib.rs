@@ -10,8 +10,12 @@
 
 pub mod landing;
 pub mod stats;
+pub mod stream;
 pub mod timeline;
 
 pub use landing::{LandingTracker, SlotDeltaSummary};
 pub use stats::{LatencyRecorder, LatencySummary};
+pub use stream::{
+    ClockComparability, MatchedStreamEvent, SourceArrival, StreamMatchBook, StreamObservation,
+};
 pub use timeline::EventTimeline;

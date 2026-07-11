@@ -2,6 +2,8 @@
 
 ## Handling of credentials
 
+Transaction-stream configs contain environment-variable names only. Never commit resolved endpoints with userinfo/query credentials, tokens, `.env` files, full environment dumps, raw transaction payloads, or unreviewed artifact directories. Public bundles must pass checksum verification and a credential scan before review.
+
 solbench probes RPC endpoints that may carry an API key in the URL (e.g.
 `https://rpc.rpcedge.com/?api-key=…`). By design:
 

@@ -16,6 +16,7 @@ pub struct LatencySummary {
     pub stddev_ns: u64,
     pub p50_ns: u64,
     pub p90_ns: u64,
+    pub p95_ns: u64,
     pub p99_ns: u64,
     pub p999_ns: u64,
 }
@@ -105,6 +106,7 @@ impl LatencyRecorder {
             stddev_ns,
             p50_ns: percentile_ns(&sorted, 0.50),
             p90_ns: percentile_ns(&sorted, 0.90),
+            p95_ns: percentile_ns(&sorted, 0.95),
             p99_ns: percentile_ns(&sorted, 0.99),
             p999_ns: percentile_ns(&sorted, 0.999),
         })
@@ -134,6 +136,7 @@ mod tests {
         assert_eq!(s.stddev_ns, 28); // population stddev of 1..=100 ≈ 28.87
         assert_eq!(s.p50_ns, 50);
         assert_eq!(s.p90_ns, 90);
+        assert_eq!(s.p95_ns, 95);
         assert_eq!(s.p99_ns, 99);
         assert_eq!(s.p999_ns, 100);
     }

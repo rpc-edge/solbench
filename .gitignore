@@ -5,5 +5,9 @@
 # env / secrets — never commit
 .env
 .env.*
+!.env.example
 *.keypair
 id.json
+
+# Local benchmark attempts are reviewed before selected bundles move to docs/reports.
+/artifacts/

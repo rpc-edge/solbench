@@ -23,6 +23,14 @@ serde_json = { workspace = true }
 clap = { workspace = true }
 ureq = { workspace = true }
 tiny_http = { workspace = true }
+anyhow = "1"
+toml = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+zstd = "0.13"
+chrono = { version = "0.4", features = ["serde"] }
+url = "2"
+bs58 = "0.5"
 
 # feature `send`
 solana-sdk = { version = "2", optional = true }

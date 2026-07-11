@@ -8,6 +8,19 @@
 Provider-neutral latency benchmarking as a single self-hostable Rust binary, plus a tested
 measurement library you can build on.
 
+## Bounded transaction-stream races
+
+Compare normal Yellowstone processed transactions and `SubscribeDeshred` concurrently across an arbitrary N-way source list:
+
+```bash
+cargo run --release --features grpc -- stream run --config examples/stream-pump-amm-rpcedge-triton.toml
+cargo run --release --features grpc -- stream verify --artifact-dir artifacts/<attempt-id>
+env -u SOLBENCH_RPCEDGE_GRPC_TOKEN -u SOLBENCH_TRITON_GRPC_TOKEN \
+  cargo run --release --features grpc -- stream report --artifact-dir artifacts/<attempt-id>
+```
+
+The publication profile is `pump_amm_transactions_v1`, with 50,000 matched observations, a 30-second grace, and no automatic retry. See [methodology](docs/stream-methodology.md), [artifacts](docs/artifacts.md), and [publishing](docs/publishing.md). Independent Thorofare and GeyserBench attempts are validation evidence, not hidden inputs to the primary result.
+
 Most "which Solana RPC is fastest?" answers are marketing or one-off scripts that report
 averages and hide the tail. solbench measures the distribution — including **jitter**
 (consistency), which for trading matters as much as the median — and is honest about what a
