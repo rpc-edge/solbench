@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "report_scope": "rpcedge_operator_lifecycle",
+  "attempt_id": "stream-20260711T075608Z",
+  "eligible": true,
+  "matched_signatures": 55424,
+  "target_matched_signatures": 50000,
+  "profile": "pump_amm_transactions_v1",
+  "measurement": {
+    "public_ip": "185.191.118.181",
+    "region": "Frankfurt, Germany",
+    "datacenter": "Cherry Servers Frankfurt (RPCEdge operator host)"
+  },
+  "first_share": {
+    "rpcedge_deshred": 55382,
+    "rpcedge_processed": 42
+  },
+  "completeness": {
+    "rpcedge_deshred": 55424,
+    "rpcedge_processed": 55424
+  },
+  "pairwise": [
+    {
+      "source_a": "rpcedge_deshred",
+      "source_b": "rpcedge_processed",
+      "comparable": 55424,
+      "a_first": 55382,
+      "b_first": 42,
+      "ties": 0,
+      "p50_delta_ns": -4640478,
+      "p90_delta_ns": -1935280,
+      "p95_delta_ns": -1615285,
+      "p99_delta_ns": -1091804,
+      "p999_delta_ns": -123864,
+      "max_abs_delta_ns": 84460881
+    }
+  ],
+  "warnings": [
+    "rpcedge_deshred provider created_at is diagnostic only (Unverified)",
+    "rpcedge_processed provider created_at is diagnostic only (Unverified)"
+  ]
+}

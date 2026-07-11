@@ -34,6 +34,9 @@ pub enum StreamCommand {
         artifact_dir: PathBuf,
         #[arg(long)]
         public_output: Option<PathBuf>,
+        /// Publish only a 50k RPCEdge deshred-vs-processed operator-host run.
+        #[arg(long, requires = "public_output")]
+        operator_lifecycle: bool,
     },
     /// Attach reviewed independent-tool evidence to an existing attempt.
     AttachValidation {
@@ -55,7 +58,8 @@ pub fn execute(command: StreamCommand) -> Result<()> {
         StreamCommand::Report {
             artifact_dir,
             public_output,
-        } => report::render(&artifact_dir, public_output.as_deref()),
+            operator_lifecycle,
+        } => report::render(&artifact_dir, public_output.as_deref(), operator_lifecycle),
         StreamCommand::AttachValidation {
             artifact_dir,
             attachment,

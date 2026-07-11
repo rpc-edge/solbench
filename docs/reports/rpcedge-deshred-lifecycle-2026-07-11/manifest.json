@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "attempt_id": "stream-20260711T075608Z",
+  "status": "completed",
+  "failure_reason": null,
+  "started_at": "2026-07-11T07:56:08.572911650+00:00",
+  "ended_at": "2026-07-11T08:01:26.843800058+00:00",
+  "duration_ns": 318270873590,
+  "config_sha256": "5bc8b73699ba5b11a5df4f89e5e813b9c04f5cd913ce32f162191b800904983b",
+  "profile": "pump_amm_transactions_v1",
+  "target_matched_signatures": 50000,
+  "minimum_match_sources": 2,
+  "matched_signatures": 55424,
+  "measurement": {
+    "public_ip": "185.191.118.181",
+    "region": "Frankfurt, Germany",
+    "datacenter": "Cherry Servers Frankfurt (RPCEdge operator host)"
+  },
+  "sources": [
+    {
+      "name": "rpcedge_deshred",
+      "provider": "RPCEdge",
+      "kind": "deshred",
+      "endpoint_host": "https://grpc.rpcedge.com:443",
+      "resolved_ips": [
+        "185.191.118.181"
+      ],
+      "clock_comparability": "unverified"
+    },
+    {
+      "name": "rpcedge_processed",
+      "provider": "RPCEdge",
+      "kind": "processed",
+      "endpoint_host": "https://grpc.rpcedge.com:443",
+      "resolved_ips": [
+        "185.191.118.181"
+      ],
+      "clock_comparability": "unverified"
+    }
+  ]
+}

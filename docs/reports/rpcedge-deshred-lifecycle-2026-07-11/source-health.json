@@ -1,0 +1,22 @@
+{
+  "rpcedge_deshred": {
+    "messages": 55476,
+    "duplicates": 47,
+    "connects": 1,
+    "connect_duration_ns": 10335207,
+    "disconnects": 0,
+    "errors": [],
+    "first_event_offset_ns": 37204911,
+    "last_event_offset_ns": 318177633717
+  },
+  "rpcedge_processed": {
+    "messages": 102927,
+    "duplicates": 64,
+    "connects": 1,
+    "connect_duration_ns": 8766903,
+    "disconnects": 0,
+    "errors": [],
+    "first_event_offset_ns": 39621479,
+    "last_event_offset_ns": 318144945738
+  }
+}

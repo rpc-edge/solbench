@@ -1,0 +1,31 @@
+[run]
+profile = "pump_amm_transactions_v1"
+target_matched_signatures = 50000
+minimum_match_sources = 2
+startup_timeout_seconds = 30
+stall_timeout_seconds = 30
+completion_grace_seconds = 30
+maximum_wall_seconds = 900
+
+[measurement]
+public_ip = "185.191.118.181"
+region = "Frankfurt, Germany"
+datacenter = "Cherry Servers Frankfurt (RPCEdge operator host)"
+
+[[sources]]
+name = "rpcedge_deshred"
+provider = "RPCEdge"
+kind = "deshred"
+endpoint_env = "SOLBENCH_RPCEDGE_GRPC_URL"
+token_env = "SOLBENCH_RPCEDGE_GRPC_TOKEN"
+required = true
+clock_comparability = "unverified"
+
+[[sources]]
+name = "rpcedge_processed"
+provider = "RPCEdge"
+kind = "processed"
+endpoint_env = "SOLBENCH_RPCEDGE_GRPC_URL"
+token_env = "SOLBENCH_RPCEDGE_GRPC_TOKEN"
+required = true
+clock_comparability = "unverified"
