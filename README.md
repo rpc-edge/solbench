@@ -33,7 +33,7 @@ per-sample data (CI regression / reproducible runs).
 |---|---|---|
 | Read latency (`getSlot` round-trip): p50/p90/p99/**p99.9**, jitter, max | ✅ now | **network-inclusive** — dominated by distance from *your host* to the endpoint |
 | Open-loop sampling (no coordinated omission) | ✅ now | each tick sends independently; a slow reply never hides the next sample |
-| Slot freshness / lag (slots behind the leading endpoint) | ✅ now | tick-aligned, fair same-moment comparison |
+| Slot freshness / lag (slots behind the best-informed endpoint) | ✅ now | compared at each server's estimated **read** moment (`send + rtt/2`), so distance is not mistaken for freshness |
 | Transaction landing rate + slots-to-land | ✅ `--features send` | actual on-chain inclusion (not `sendTransaction`-returned-success) |
 | Yellowstone gRPC first-seen delta (concurrent two-endpoint race) | ✅ `--features grpc` | the metric that reflects co-located infra; never `blockTime` |
 | Per-method matrix (`getAccountInfo`, `getMultipleAccounts`, …) | ⏳ roadmap | |
@@ -118,6 +118,12 @@ SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" solbench probe
 - **Host-relative, same-vantage comparison.** All endpoints are probed from the same host on the
   same tick schedule, so shared network conditions are common to every row — but absolute numbers
   still include the RTT from *that host*. Report your measurement region when you publish a run.
+- **Slot-lag is round-trip compensated.** An RPC reads its slot when it *processes* the request —
+  at roughly `send + rtt/2` — not when the request was sent. A distant endpoint therefore reads the
+  chain later in wall-clock time and reports a *higher* slot for free: at ~400ms slots, an endpoint
+  600ms away gains ~0.75 slots on one 4ms away. Comparing slots merely *sent* on the same tick would
+  reward distance and penalise co-location — backwards. solbench instead scores each reading against
+  the best chain state anyone had observed by that endpoint's estimated read moment.
 - **On-chain inclusion for landing.** `send` waits for `getSignatureStatuses` to confirm, never
   treating a `sendTransaction` success as "landed."
 - **Operator disclosure.** solbench is maintained by [rpc edge](https://rpcedge.com), a Solana
@@ -126,7 +132,10 @@ SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" solbench probe
   run your own.
 - **Known limits today:** `probe` read-latency is network-inclusive (run co-located, or use `grpc`/
   `send`, to reflect infra); exact percentiles (no HDR histogram yet); public endpoints may
-  rate-limit under high `--samples`.
+  rate-limit under high `--samples`. Slot-lag's `rtt/2` assumes a symmetric path and folds in server
+  processing time, and it is measured *relative to the best-informed endpoint in the run* (a single
+  endpoint is always 0) — it is a conservative lower bound on true staleness, tightened by a shorter
+  `--interval-ms`.
 
 ## Roadmap
 
@@ -143,14 +152,15 @@ Ordered by how much they close the gap to "what traders actually trade on":
 ## How it's built
 
 A Cargo workspace. `solbench-core` is a standalone, **network-free, unit-tested** measurement
-library (percentile stats + jitter, per-operation event timelines, landing-rate tracking) — the
+library (percentile stats + jitter, round-trip-compensated slot-lag, per-operation event timelines,
+landing-rate tracking) — the
 same primitives are reused by downstream latency harnesses, so a benchmark and a bot publish
 numbers from the same verifiable code.
 
 ```
 solbench/
   crates/
-    solbench-core/   # reusable measurement library (stats, timeline, landing)
+    solbench-core/   # reusable measurement library (stats, slotlag, timeline, landing)
     solbench-cli/    # the `solbench` binary (probe, serve, demo)
 ```
 

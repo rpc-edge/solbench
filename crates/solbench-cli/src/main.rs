@@ -147,7 +147,9 @@ fn main() {
                 );
             }
             eprintln!(
-                "\njitter = stddev (consistency); lag = mean slots behind the leading endpoint.\n\
+                "\njitter = stddev (consistency). lag = mean slots behind the best chain state known\n\
+                 when this endpoint read it - compared at each server's estimated read moment\n\
+                 (send + rtt/2), so distance is not counted as freshness.\n\
                  getSlot round-trip is read latency from THIS host - dominated by network distance\n\
                  to the client, NOT a proxy for tx-landing or shred first-seen latency. Use\n\
                  `solbench grpc` / `solbench send` (or run co-located) for the infra story."

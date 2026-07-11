@@ -9,9 +9,11 @@
 //! publishes rest on the same, verifiable measurement code.
 
 pub mod landing;
+pub mod slotlag;
 pub mod stats;
 pub mod timeline;
 
 pub use landing::{LandingTracker, SlotDeltaSummary};
+pub use slotlag::{observed_at_ns, SlotLagEstimator, SlotLagSummary, SlotObservation};
 pub use stats::{LatencyRecorder, LatencySummary};
 pub use timeline::EventTimeline;
