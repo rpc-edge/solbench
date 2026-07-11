@@ -1,4 +1,5 @@
 name: Deploy benchmark reports to Pages
+# Publishing source is the reviewed static content under docs/ only.
 on:
   push:
     branches: [main]
