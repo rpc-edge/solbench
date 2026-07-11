@@ -121,5 +121,5 @@ tr.best td{background:rgba(197,242,63,.06)}
 <thead><tr><th>endpoint</th><th>host</th><th>p50</th><th>p99</th><th>jitter</th><th>ok</th><th>slot</th><th>lag</th></tr></thead>
 <tbody>__ROWS__</tbody>
 </table>
-<p class="foot"><b>Read latency from THIS host.</b> getSlot round-trip is dominated by network distance to the client &mdash; it is <b>not</b> a proxy for transaction-landing or shred/first-seen latency, where co-located infra wins. Run solbench from your trading edge for a meaningful comparison. &middot; jitter = stddev (consistency) &middot; lag = slots behind the leading endpoint &middot; lower is better</p>
+<p class="foot"><b>Read latency from THIS host.</b> getSlot round-trip is dominated by network distance to the client &mdash; it is <b>not</b> a proxy for transaction-landing or shred/first-seen latency, where co-located infra wins. Run solbench from your trading edge for a meaningful comparison. &middot; jitter = stddev (consistency) &middot; lag = slots behind the best chain state known at this endpoint's estimated read moment (send + rtt/2), so distance is not counted as freshness &middot; lower is better</p>
 </div></body></html>"#;
