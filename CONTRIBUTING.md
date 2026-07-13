@@ -29,3 +29,8 @@ CI runs all of the above on Linux and macOS; please make sure they pass locally 
 
 Bugs, methodology critiques, and endpoint/metric requests are all welcome as issues. Security
 reports: see [SECURITY.md](./SECURITY.md).
+
+## Maintainer
+
+solbench is maintained by [rpc edge](https://rpcedge.com). Product access is optional and separate
+from contributing: [app.rpcedge.com/signup](https://app.rpcedge.com/signup).

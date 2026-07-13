@@ -8,6 +8,10 @@
 Provider-neutral latency benchmarking as a single self-hostable Rust binary, plus a tested
 measurement library you can build on.
 
+Maintained by [rpc edge](https://rpcedge.com) - co-located Solana RPC, Yellowstone gRPC, decoded
+shreds, and a transaction sender. The harness stays open and fair; the product is optional.
+[Self-serve access →](https://app.rpcedge.com/signup) · [Published reports →](https://rpcedge.com/benchmarks)
+
 ## Bounded transaction-stream races
 
 Compare normal Yellowstone processed transactions and `SubscribeDeshred` concurrently across an arbitrary N-way source list:
@@ -158,11 +162,28 @@ SOLBENCH_RPCEDGE_URL="https://YOUR_RPC_HOST/?api-key=…" solbench probe
   treating a `sendTransaction` success as "landed."
 - **Operator disclosure.** solbench is maintained by [rpc edge](https://rpcedge.com), a Solana
   infra provider that may appear in results. Endpoints are configured identically; the harness and
-  raw JSON are open so anyone can reproduce. A non-reproducible score is a self-reported claim —
+  raw JSON are open so anyone can reproduce. A non-reproducible score is a self-reported claim -
   run your own.
 - **Known limits today:** `probe` read-latency is network-inclusive (run co-located, or use `grpc`/
   `send`, to reflect infra); exact percentiles (no HDR histogram yet); public endpoints may
   rate-limit under high `--samples`.
+
+## Soft commercial note
+
+This tool is free and MIT-licensed. You do not need an rpc edge account to use it.
+
+If you are shopping for co-located Solana infrastructure and want the same desk that maintains
+this harness:
+
+| | |
+|---|---|
+| Product | [rpcedge.com](https://rpcedge.com) |
+| Self-serve (API keys, plans) | [app.rpcedge.com/signup](https://app.rpcedge.com/signup) |
+| Docs | [docs.rpcedge.com](https://docs.rpcedge.com) |
+| Measure us like anyone else | `SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" solbench probe` |
+| Evidence board | [rpcedge.com/benchmarks](https://rpcedge.com/benchmarks) |
+
+No preferred treatment in the code path. Your endpoints, your host, your numbers.
 
 ## Roadmap
 
@@ -197,5 +218,7 @@ Issues and PRs welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md). CI enforces
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). Provider-neutral by design; the hosted leaderboard is operated by
-[rpc edge](https://rpcedge.com).
+MIT - see [LICENSE](./LICENSE). Provider-neutral by design.
+
+Built by [rpc edge](https://rpcedge.com). Prefer numbers over claims - then
+[try the stack](https://app.rpcedge.com/signup) if the measurements fit your desk.

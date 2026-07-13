@@ -90,6 +90,9 @@ jobs:
             ```
 
             `solbench report > run.json` emits a hostable leaderboard feed.
-            Label your region honestly — laptop geography is not co-located infra.
+            Label your region honestly - laptop geography is not co-located infra.
+
+            Maintained by [rpc edge](https://rpcedge.com). Optional product access:
+            [app.rpcedge.com/signup](https://app.rpcedge.com/signup).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
