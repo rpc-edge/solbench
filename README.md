@@ -85,8 +85,9 @@ git clone https://github.com/rpc-edge/solbench && cd solbench
 cargo build --release   # ./target/release/solbench
 ```
 
-Tagged releases attach linux/macOS tarballs via `.github/workflows/release.yml` (full
-`grpc`+`send` feature set). Intel macOS is cross-built from the Apple Silicon runner.
+Tagged releases attach linux/macOS tarballs via `.github/workflows/release.yml`.
+Linux and Apple Silicon ship with full `grpc`+`send`. Intel macOS ships the lean default
+binary (probe/report); build with `--features "grpc,send"` from source for stream races.
 
 ### Which repo for which benchmark?
 
