@@ -79,20 +79,28 @@ Tagged releases attach linux/macOS tarballs via `.github/workflows/release.yml`.
 | Read latency, slot-lag, gRPC first-seen, stream races (deshred vs processed) | **this repo (`solbench`)** |
 | Transaction submit → observe, leader-paced route A/B, QUIC relay | [`solana-tx-bench`](https://github.com/rpc-edge/solana-tx-bench) |
 
-Published rpc edge reports always set `repositoryUrl` to the harness that produced them. Do not substitute.
+When you publish a report, set `repositoryUrl` to the harness that produced it. Do not substitute.
 
 ### Hosted leaderboard feed
 
-`solbench report` emits JSON matching [rpcedge.com/benchmarks/live](https://rpcedge.com/benchmarks/live).
+`solbench report` emits stable JSON a host can render (schema used by
+[rpcedge.com/benchmarks/live](https://rpcedge.com/benchmarks/live) among others). How you publish
+that file is up to you - this repo only produces the measurement.
 
 ```sh
-# On a co-located host (not a laptop) — geography dominates read latency
-SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" \
-  solbench report --region "Frankfurt · Equinix FR13" --window "rolling 24h" \
-  > apps/web/data/benchmarks-live.json
+# Co-located host preferred — geography dominates absolute read latency
+# Auth-bearing URLs stay in the environment; never commit them
+SOLBENCH_RPCEDGE_URL="https://YOUR_RPC_HOST/?api-key=…" \
+  solbench report --region "your-region · your-facility" --window "rolling 24h" \
+  > run.json
+
+# Add any rival the same way
+solbench report --region "your-region" \
+  --provider "other=https://…" \
+  > run.json
 ```
 
-In the monorepo: `scripts/publish-benchmarks-live.sh` (refuses smoke/laptop region labels unless `FORCE_NON_COLO=1`).
+Label the region honestly. Laptop geography is not co-located infrastructure.
 
 ## Usage
 
@@ -106,14 +114,8 @@ solbench report --region "…"     # leaderboard-shaped JSON for a hosted board
 solbench demo                    # measurement pipeline over synthetic data
 ```
 
-`report` emits the JSON a hosted leaderboard renders (read latency + slot-lag per provider;
-`firstSeenP50`/`landingRate` filled from separate `grpc`/`send` runs). Add rivals with
-`--provider "Name=https://…"`. Run it co-located and publish on a cron:
-
-```sh
-SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" \
-  solbench report --region "Frankfurt · Equinix FR13" --window "rolling 24h" > run.json
-```
+`report` fills read latency + slot-lag per provider; `firstSeenP50` / `landingRate` come from
+separate `grpc` / `send` runs. Add rivals with `--provider "Name=https://…"`.
 
 **Transaction landing** (opt-in, pulls `solana-sdk`) — measures actual on-chain inclusion.
 DEVNET-first; point it at mainnet only with your own funded keypair on your own host (never CI):
@@ -130,8 +132,8 @@ co-located infra (a relative two-endpoint race — never `receive_time - blockTi
 
 ```sh
 cargo build --release --features grpc
-SOLBENCH_GRPC_A=https://grpc.rpcedge.com:443          SOLBENCH_GRPC_A_TOKEN=… \
-SOLBENCH_GRPC_B=https://frankfurt.grpc.rpcedge.com:443 SOLBENCH_GRPC_B_TOKEN=… \
+SOLBENCH_GRPC_A=https://grpc.example.com:443 SOLBENCH_GRPC_A_TOKEN=… \
+SOLBENCH_GRPC_B=https://other.example.com:443 SOLBENCH_GRPC_B_TOKEN=… \
   solbench grpc --slots 200
 ```
 
@@ -140,9 +142,8 @@ environment — the full URL (including `?api-key=`) is read at runtime and **ne
 logged** (only the host is shown):
 
 ```sh
-SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" solbench probe
+SOLBENCH_RPCEDGE_URL="https://YOUR_RPC_HOST/?api-key=…" solbench probe
 ```
-
 ## Methodology & limitations
 
 - **Distributions, not averages.** p50/p90/p99/p99.9 + stddev (jitter); the tail is what trading

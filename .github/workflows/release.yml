@@ -89,7 +89,7 @@ jobs:
             solbench report --region "your-region" --window "1h" > run.json
             ```
 
-            Leaderboard feed schema matches [rpcedge.com/benchmarks/live](https://rpcedge.com/benchmarks/live).
-            Publish co-located runs only — laptop geography is not infra.
+            `solbench report > run.json` emits a hostable leaderboard feed.
+            Label your region honestly — laptop geography is not co-located infra.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
