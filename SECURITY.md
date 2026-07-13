@@ -16,6 +16,13 @@ solbench probes RPC endpoints that may carry an API key in the URL (e.g.
 
 When you self-host the `serve` dashboard, it binds to `127.0.0.1` (localhost) only.
 
+## Dependency audit
+
+CI runs `cargo audit` on every PR and weekly (`audit.yml`). Known **transitive**
+advisories from optional `solana-sdk` (`send` feature) are documented in
+[`.cargo/audit.toml`](./.cargo/audit.toml) with upgrade notes. Default and `grpc`
+builds do not pull those crates.
+
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately via GitHub Security Advisories

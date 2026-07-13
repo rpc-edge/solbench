@@ -1,0 +1,15 @@
+# cargo-audit configuration (https://docs.rs/cargo-audit)
+#
+# Vulnerabilities listed here are **transitive** through optional feature
+# `send` → solana-sdk 2.x. They are not reachable from the default binary.
+# Track upstream Anza/solana-sdk for dalek upgrades; re-evaluate on major bumps.
+
+[advisories]
+ignore = [
+    # Timing variability in curve25519-dalek 3.x (via solana-sdk 2.x key material).
+    # Fixed in dalek ≥4.1.3; blocked until solana-sdk drops the 3.x dep.
+    "RUSTSEC-2024-0344",
+    # Double-PK signing oracle on ed25519-dalek 1.x (via solana-sdk 2.x).
+    # Fixed in dalek ≥2; same upstream dependency wall.
+    "RUSTSEC-2022-0093",
+]

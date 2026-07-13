@@ -21,13 +21,14 @@ pub struct LatencySummary {
     pub p999_ns: u64,
 }
 
-/// Nearest-rank percentile over an ascending-sorted, non-empty slice.
-/// `q` is a quantile in `[0.0, 1.0]`.
-fn percentile_ns(sorted: &[u64], q: f64) -> u64 {
-    debug_assert!(
-        !sorted.is_empty(),
-        "percentile_ns requires a non-empty slice"
-    );
+/// Nearest-rank percentile over an ascending-sorted slice.
+///
+/// `q` is a quantile in `[0.0, 1.0]`. Returns `0` for an empty input (callers that
+/// need a hard non-empty invariant can check `sorted` first).
+pub fn nearest_rank_percentile(sorted: &[u64], q: f64) -> u64 {
+    if sorted.is_empty() {
+        return 0;
+    }
     let n = sorted.len();
     if q <= 0.0 {
         return sorted[0];
@@ -36,6 +37,12 @@ fn percentile_ns(sorted: &[u64], q: f64) -> u64 {
     let rank = (q * n as f64).ceil() as usize;
     let idx = rank.saturating_sub(1).min(n - 1);
     sorted[idx]
+}
+
+/// Alias used by latency summaries (samples are always non-empty when called).
+#[inline]
+fn percentile_ns(sorted: &[u64], q: f64) -> u64 {
+    nearest_rank_percentile(sorted, q)
 }
 
 /// Collects latency samples and produces a [`LatencySummary`].
@@ -152,5 +159,14 @@ mod tests {
         assert_eq!(s.stddev_ns, 0);
         assert_eq!(s.p50_ns, 42);
         assert_eq!(s.p999_ns, 42);
+    }
+
+    #[test]
+    fn nearest_rank_empty_and_bounds() {
+        assert_eq!(nearest_rank_percentile(&[], 0.5), 0);
+        let s = [1u64, 2, 3, 4, 5];
+        assert_eq!(nearest_rank_percentile(&s, 0.0), 1);
+        assert_eq!(nearest_rank_percentile(&s, 1.0), 5);
+        assert_eq!(nearest_rank_percentile(&s, 0.5), 3);
     }
 }

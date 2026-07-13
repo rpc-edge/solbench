@@ -22,6 +22,7 @@ cargo run --release -- stream check-config --config examples/stream-pump-amm-rpc
 
 cargo run --release --features grpc -- stream run --config examples/stream-pump-amm-rpcedge-triton.toml
 cargo run --release --features grpc -- stream verify --artifact-dir artifacts/<attempt-id>
+# Public bundles use matched-events.ndjson.zst — verify accepts plain or .zst
 env -u SOLBENCH_RPCEDGE_GRPC_TOKEN -u SOLBENCH_TRITON_GRPC_TOKEN \
   cargo run --release --features grpc -- stream report --artifact-dir artifacts/<attempt-id>
 ```

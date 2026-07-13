@@ -14,7 +14,7 @@ pub mod stream;
 pub mod timeline;
 
 pub use landing::{LandingTracker, SlotDeltaSummary};
-pub use stats::{LatencyRecorder, LatencySummary};
+pub use stats::{nearest_rank_percentile, LatencyRecorder, LatencySummary};
 pub use stream::{
     ClockComparability, MatchedStreamEvent, SourceArrival, StreamMatchBook, StreamObservation,
 };

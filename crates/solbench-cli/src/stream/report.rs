@@ -51,7 +51,7 @@ struct Pairwise {
 pub fn render(dir: &Path, public_output: Option<&Path>, operator_lifecycle: bool) -> Result<()> {
     let manifest: Manifest = serde_json::from_slice(&fs::read(dir.join("manifest.json"))?)?;
     let events: Vec<solbench_core::MatchedStreamEvent> =
-        super::artifacts::read_ndjson(&dir.join("matched-events.ndjson"))?;
+        super::artifacts::read_matched_events(dir)?;
     let health: BTreeMap<String, SourceHealth> =
         serde_json::from_slice(&fs::read(dir.join("source-health.json"))?)?;
     if operator_lifecycle {
@@ -165,19 +165,10 @@ fn endpoint_performance(
         observations,
         first_detections,
         first_detection_rate_pct: rate,
-        p50_lag_ms: percentile(&lags, 0.50) as f64 / 1e6,
-        p95_lag_ms: percentile(&lags, 0.95) as f64 / 1e6,
-        p99_lag_ms: percentile(&lags, 0.99) as f64 / 1e6,
+        p50_lag_ms: solbench_core::nearest_rank_percentile(&lags, 0.50) as f64 / 1e6,
+        p95_lag_ms: solbench_core::nearest_rank_percentile(&lags, 0.95) as f64 / 1e6,
+        p99_lag_ms: solbench_core::nearest_rank_percentile(&lags, 0.99) as f64 / 1e6,
     }
-}
-fn percentile(sorted: &[u64], quantile: f64) -> u64 {
-    if sorted.is_empty() {
-        return 0;
-    }
-    let index = ((quantile * sorted.len() as f64).ceil() as usize)
-        .saturating_sub(1)
-        .min(sorted.len() - 1);
-    sorted[index]
 }
 fn pair(a: &str, b: &str, events: &[solbench_core::MatchedStreamEvent]) -> Pairwise {
     let mut d = Vec::new();
@@ -434,19 +425,20 @@ fn public_bundle(dir: &Path, out: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_count, percentile};
+    use super::format_count;
+    use solbench_core::nearest_rank_percentile;
 
     #[test]
     fn endpoint_percentiles_use_nearest_rank() {
         let samples = (1..=100).collect::<Vec<u64>>();
-        assert_eq!(percentile(&samples, 0.50), 50);
-        assert_eq!(percentile(&samples, 0.95), 95);
-        assert_eq!(percentile(&samples, 0.99), 99);
+        assert_eq!(nearest_rank_percentile(&samples, 0.50), 50);
+        assert_eq!(nearest_rank_percentile(&samples, 0.95), 95);
+        assert_eq!(nearest_rank_percentile(&samples, 0.99), 99);
     }
 
     #[test]
     fn empty_endpoint_percentiles_are_zero() {
-        assert_eq!(percentile(&[], 0.99), 0);
+        assert_eq!(nearest_rank_percentile(&[], 0.99), 0);
     }
 
     #[test]
