@@ -1,5 +1,8 @@
 # Build + attach solbench binaries on version tags (v0.1.0, …).
-# Create a release: git tag v0.1.0 && git push origin v0.1.0
+# Create a release: git tag v0.1.1 && git push origin v0.1.1
+#
+# Binaries ship with `grpc` + `send` so stream/grpc/send work from the tarball.
+# Default-feature-only builds remain available via `cargo install --git …`.
 name: Release
 
 on:
@@ -11,10 +14,12 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Full feature set for published binaries (stream run, grpc race, send landing).
+  SOLBENCH_FEATURES: "grpc,send"
 
 jobs:
   build:
-    name: build (${{ matrix.target }})
+    name: build (${{ matrix.artifact }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -23,10 +28,11 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: solbench-x86_64-unknown-linux-gnu
+          # Apple Silicon runner; also cross-builds Intel macOS (macos-13 is retired).
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: solbench-aarch64-apple-darwin
-          - os: macos-13
+          - os: macos-latest
             target: x86_64-apple-darwin
             artifact: solbench-x86_64-apple-darwin
     steps:
@@ -35,8 +41,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} -p solbench
+        run: |
+          cargo build --release --target ${{ matrix.target }} -p solbench \
+            --features "${SOLBENCH_FEATURES}"
       - name: Stage artifact
         run: |
           BIN=target/${{ matrix.target }}/release/solbench
@@ -46,12 +56,16 @@ jobs:
           cp "$BIN" "dist/solbench"
           tar -C dist -czf "${STAGE}.tar.gz" solbench
           shasum -a 256 "${STAGE}.tar.gz" > "${STAGE}.tar.gz.sha256"
+          # Record which features this binary was built with.
+          printf '%s\n' "features=${SOLBENCH_FEATURES}" "target=${{ matrix.target }}" \
+            > "${STAGE}.buildinfo"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
             ${{ matrix.artifact }}.tar.gz
             ${{ matrix.artifact }}.tar.gz.sha256
+            ${{ matrix.artifact }}.buildinfo
 
   publish:
     name: GitHub Release
@@ -65,7 +79,8 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -exec cp {} release/ \;
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' -o -name '*.buildinfo' \) \
+            -exec cp {} release/ \;
           ls -la release/
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -76,10 +91,13 @@ jobs:
             ## Install
 
             Download the binary for your platform, extract, and put `solbench` on your `PATH`.
+            Release binaries include `grpc` and `send` features (`stream run`, `grpc`, `send`).
 
             ```sh
-            # or build from source
+            # or build from source (default features stay lean)
             cargo install --git https://github.com/rpc-edge/solbench solbench
+            # full feature set:
+            cargo install --git https://github.com/rpc-edge/solbench solbench --features "grpc,send"
             ```
 
             ## Quick start
@@ -87,9 +105,9 @@ jobs:
             ```sh
             solbench probe
             solbench report --region "your-region" --window "1h" > run.json
+            solbench stream check-config --config examples/stream-pump-amm-rpcedge-triton.toml
             ```
 
-            `solbench report > run.json` emits a hostable leaderboard feed.
             Label your region honestly - laptop geography is not co-located infra.
 
             Maintained by [rpc edge](https://rpcedge.com). Optional product access:

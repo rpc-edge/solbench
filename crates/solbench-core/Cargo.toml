@@ -3,9 +3,14 @@ name = "solbench-core"
 description = "Reusable latency and landing-rate measurement primitives for Solana RPC/gRPC benchmarking. Foundation crate for solbench and downstream latency harnesses (e.g. the CLOB market-maker)."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
 authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 serde = { workspace = true }

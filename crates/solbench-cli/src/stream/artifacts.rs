@@ -1,11 +1,13 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "grpc")]
 use solbench_core::{MatchedStreamEvent, StreamObservation};
+#[cfg(feature = "grpc")]
+use std::{collections::BTreeMap, fs::File, io::BufWriter, path::PathBuf};
 use std::{
-    collections::BTreeMap,
-    fs::{self, File, OpenOptions},
-    io::{BufWriter, Write},
-    path::{Path, PathBuf},
+    fs::{self, OpenOptions},
+    io::Write,
+    path::Path,
 };
 
 pub const SCHEMA_VERSION: u32 = 1;
@@ -55,6 +57,8 @@ pub struct SourceHealth {
     pub last_event_offset_ns: Option<u64>,
 }
 
+/// Online attempt writer (requires `grpc` feature used by `stream run`).
+#[cfg(feature = "grpc")]
 pub struct ArtifactWriter {
     pub dir: PathBuf,
     pub manifest: Manifest,
@@ -62,6 +66,8 @@ pub struct ArtifactWriter {
     matched: BufWriter<File>,
     pub health: BTreeMap<String, SourceHealth>,
 }
+
+#[cfg(feature = "grpc")]
 impl ArtifactWriter {
     pub fn create(root: &Path, manifest: Manifest, redacted_config: &str) -> Result<Self> {
         let dir = root.join(&manifest.attempt_id);
@@ -106,6 +112,7 @@ impl ArtifactWriter {
         Ok(self.dir)
     }
 }
+
 pub fn atomic_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let tmp = path.with_extension("tmp");
     let mut f = OpenOptions::new()
@@ -147,4 +154,22 @@ pub fn read_ndjson<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Vec<T>> 
             serde_json::from_str(l).with_context(|| format!("{} line {}", path.display(), i + 1))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    #[test]
+    fn atomic_json_roundtrip() {
+        let dir = env::temp_dir().join(format!("solbench-atomic-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("x.json");
+        atomic_json(&path, &serde_json::json!({"ok": true})).unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(v["ok"], true);
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

@@ -3,9 +3,14 @@ name = "solbench"
 description = "Continuous Solana RPC/gRPC/relay benchmark: read latency, jitter, slot-lag, gRPC first-seen, and transaction landing."
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
 authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [[bin]]
 name = "solbench"

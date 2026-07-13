@@ -17,6 +17,9 @@ shreds, and a transaction sender. The harness stays open and fair; the product i
 Compare normal Yellowstone processed transactions and `SubscribeDeshred` concurrently across an arbitrary N-way source list:
 
 ```bash
+# Validate config (no network, any feature set)
+cargo run --release -- stream check-config --config examples/stream-pump-amm-rpcedge-triton.toml
+
 cargo run --release --features grpc -- stream run --config examples/stream-pump-amm-rpcedge-triton.toml
 cargo run --release --features grpc -- stream verify --artifact-dir artifacts/<attempt-id>
 env -u SOLBENCH_RPCEDGE_GRPC_TOKEN -u SOLBENCH_TRITON_GRPC_TOKEN \
@@ -26,9 +29,17 @@ env -u SOLBENCH_RPCEDGE_GRPC_TOKEN -u SOLBENCH_TRITON_GRPC_TOKEN \
 The publication profile is `pump_amm_transactions_v1`, with 50,000 matched observations, a 30-second grace, and no automatic retry. See [methodology](docs/stream-methodology.md), [artifacts](docs/artifacts.md), and [publishing](docs/publishing.md). Independent Thorofare and GeyserBench attempts are validation evidence, not hidden inputs to the primary result.
 
 Most "which Solana RPC is fastest?" answers are marketing or one-off scripts that report
-averages and hide the tail. solbench measures the distribution — including **jitter**
-(consistency), which for trading matters as much as the median — and is honest about what a
+averages and hide the tail. solbench measures the distribution - including **jitter**
+(consistency), which for trading matters as much as the median - and is honest about what a
 number does and doesn't mean.
+
+Default builds stay lean (`probe` / `serve` / `report` / offline stream report). Full streaming
+and send metrics need features:
+
+```sh
+cargo build --release --features "grpc,send"
+# GitHub Release binaries already include grpc + send
+```
 
 ## Example output
 
@@ -74,7 +85,8 @@ git clone https://github.com/rpc-edge/solbench && cd solbench
 cargo build --release   # ./target/release/solbench
 ```
 
-Tagged releases attach linux/macOS tarballs via `.github/workflows/release.yml`.
+Tagged releases attach linux/macOS tarballs via `.github/workflows/release.yml` (full
+`grpc`+`send` feature set). Intel macOS is cross-built from the Apple Silicon runner.
 
 ### Which repo for which benchmark?
 
@@ -152,8 +164,9 @@ SOLBENCH_RPCEDGE_URL="https://YOUR_RPC_HOST/?api-key=…" solbench probe
 
 - **Distributions, not averages.** p50/p90/p99/p99.9 + stddev (jitter); the tail is what trading
   cares about.
-- **Open-loop sampling.** Each sample tick fires its own request on a fixed schedule, so a slow
-  reply never delays (and never hides) the next one — the standard fix for coordinated omission.
+- **Open-loop issue rate.** Each sample tick fires its own request on a fixed schedule, so a slow
+  reply never delays (and never hides) the next sample. Latency is **send→reply RTT** for that
+  request (not a synthetic intended-start clock).
 - **Monotonic clocks** for every duration (no NTP skew).
 - **Host-relative, same-vantage comparison.** All endpoints are probed from the same host on the
   same tick schedule, so shared network conditions are common to every row — but absolute numbers
@@ -207,8 +220,8 @@ numbers from the same verifiable code.
 ```
 solbench/
   crates/
-    solbench-core/   # reusable measurement library (stats, timeline, landing)
-    solbench-cli/    # the `solbench` binary (probe, serve, demo)
+    solbench-core/   # network-free measurement library (stats, stream match, landing)
+    solbench-cli/    # binary: probe, serve, report, stream, grpc, send, demo
 ```
 
 ## Contributing

@@ -12,6 +12,7 @@ pub fn run(_keypair: Option<String>, _url: Option<String>, _count: usize) -> Res
 
 #[cfg(feature = "send")]
 pub fn run(keypair: Option<String>, url: Option<String>, count: usize) -> Result<(), String> {
+    use crate::util::redact_host;
     use base64::Engine as _;
     use solana_sdk::instruction::Instruction;
     use solana_sdk::message::Message;
@@ -98,16 +99,6 @@ pub fn run(keypair: Option<String>, url: Option<String>, count: usize) -> Result
         );
     }
     Ok(())
-}
-
-#[cfg(feature = "send")]
-fn redact_host(url: &str) -> String {
-    let no_scheme = url.split("://").nth(1).unwrap_or(url);
-    no_scheme
-        .split(['/', '?'])
-        .next()
-        .unwrap_or(no_scheme)
-        .to_string()
 }
 
 #[cfg(feature = "send")]

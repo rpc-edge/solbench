@@ -29,12 +29,9 @@ pub fn attach(dir: &Path, path: &Path) -> Result<()> {
     let a: ValidationAttachment =
         serde_json::from_slice(&bytes).context("validation attachment")?;
     let serialized = String::from_utf8_lossy(&bytes);
-    if serialized.contains("Bearer ")
-        || serialized.to_ascii_lowercase().contains("x-token")
-        || a.command.contains("TOKEN=")
-    {
+    if looks_like_credential_material(&serialized) || looks_like_credential_material(&a.command) {
         bail!("validation attachment contains credential material")
-    };
+    }
     let out = dir.join("validation").join(safe_name(&a.tool));
     fs::create_dir_all(&out)?;
     fs::write(out.join("attachment.json"), bytes)?;
@@ -51,4 +48,37 @@ fn safe_name(v: &str) -> String {
             }
         })
         .collect()
+}
+
+/// Best-effort scan for secrets pasted into validation attachments.
+fn looks_like_credential_material(s: &str) -> bool {
+    let lower = s.to_ascii_lowercase();
+    const NEEDLES: &[&str] = &[
+        "bearer ",
+        "authorization:",
+        "x-token",
+        "api-key=",
+        "api_key=",
+        "token=",
+        "-----begin ",
+        "private_key",
+        "secret_key",
+        "password=",
+    ];
+    NEEDLES.iter().any(|n| lower.contains(n))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_api_key_material() {
+        assert!(looks_like_credential_material(
+            r#"{"command":"run --url https://x/?api-key=abc"}"#
+        ));
+        assert!(!looks_like_credential_material(
+            r#"{"command":"geyserbench --slots 200","tool":"GeyserBench"}"#
+        ));
+    }
 }

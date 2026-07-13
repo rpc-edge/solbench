@@ -11,38 +11,61 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
 
 jobs:
   check:
-    name: fmt · clippy · test
+    name: fmt · clippy · test (${{ matrix.features }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        features:
+          - ""
+          - "grpc,send"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.features }}
       - name: fmt
+        if: matrix.features == '' && matrix.os == 'ubuntu-latest'
         run: cargo fmt --all --check
       - name: clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: |
+          if [ -z "${{ matrix.features }}" ]; then
+            cargo clippy --all-targets -- -D warnings
+          else
+            cargo clippy --all-targets --features "${{ matrix.features }}" -- -D warnings
+          fi
       - name: test
-        run: cargo test --all
-      - name: build
-        run: cargo build --release
+        run: |
+          if [ -z "${{ matrix.features }}" ]; then
+            cargo test --all
+          else
+            cargo test --all --features "${{ matrix.features }}"
+          fi
+      - name: release build
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          if [ -z "${{ matrix.features }}" ]; then
+            cargo build --release -p solbench
+          else
+            cargo build --release -p solbench --features "${{ matrix.features }}"
+          fi
 
-  features:
-    name: feature builds
+  docs:
+    name: docs build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
       - uses: Swatinem/rust-cache@v2
-      # `send` pulls solana-sdk, `grpc` pulls yellowstone/tonic; keep both lint-clean.
-      - run: cargo clippy --all-targets --features "send grpc" -- -D warnings
+      - name: cargo doc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps --document-private-items

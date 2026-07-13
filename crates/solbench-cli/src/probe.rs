@@ -2,18 +2,26 @@
 //!
 //! Kept in the CLI (not in the network-free `solbench-core`). Each endpoint is
 //! sampled on its own thread against a *shared, fixed tick schedule*, so:
-//!   - latency is measured from each sample's INTENDED start time, not its actual
-//!     issue time — this corrects coordinated omission (a slow reply that delays
-//!     the next send inflates the measured latency instead of being hidden), and
+//!   - requests are **issued** on schedule (open-loop): a slow reply never delays
+//!     the next send, which is the standard fix for coordinated omission of *samples*,
+//!   - latency is **send → reply RTT** (wall time for that request), and
 //!   - slot reads are tick-aligned across endpoints, so slot-lag is a fair
-//!     same-moment comparison rather than a snapshot.
+//!     same-moment comparison rather than a staggered snapshot.
+//!
+//! In-flight requests are capped so pathological `--samples` / low `--interval-ms`
+//! cannot spawn unbounded threads.
 
+use crate::util::redact_host;
 use serde::Serialize;
 use solbench_core::{LatencyRecorder, LatencySummary};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+
+/// Cap concurrent request workers per endpoint (open-loop still issues on schedule
+/// until this many are outstanding; then the scheduler joins the oldest worker).
+const MAX_INFLIGHT: usize = 64;
 
 /// A named endpoint to probe. `url` may carry an API key in the query string; it
 /// is never logged or rendered — only [`ProbeResult::host`] (key-stripped) is.
@@ -45,17 +53,6 @@ pub struct ProbeResult {
     pub slot_lag: Option<SlotLag>,
 }
 
-/// Host portion of a URL with any credentials/query stripped
-/// (`https://rpc.rpcedge.com/?api-key=...` -> `rpc.rpcedge.com`).
-fn redact_host(url: &str) -> String {
-    let no_scheme = url.split("://").nth(1).unwrap_or(url);
-    no_scheme
-        .split(['/', '?'])
-        .next()
-        .unwrap_or(no_scheme)
-        .to_string()
-}
-
 /// Raw per-endpoint output of one sampling run.
 struct Raw {
     label: String,
@@ -69,31 +66,37 @@ struct Raw {
 
 /// Sample one endpoint `samples` times on the shared tick schedule starting at `t0`.
 ///
-/// True open-loop: each tick spawns its own request worker, so a slow reply never
-/// delays the next send (no coordinated omission). Latency is the actual send->reply
-/// round-trip; the shared `agent` pools warm connections across workers.
+/// True open-loop issue rate: each tick spawns its own request worker (subject to
+/// [`MAX_INFLIGHT`]), so a slow reply never hides the next sample. Latency is the
+/// actual send→reply round-trip; the shared `agent` pools warm connections.
 fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) -> Raw {
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(6))
         .build();
     let body = r#"{"jsonrpc":"2.0","id":1,"method":"getSlot"}"#;
 
-    // (tick, latency_ns, slot) for successful samples; separate error counter.
     let ok: Arc<Mutex<Vec<(usize, u64, u64)>>> = Arc::new(Mutex::new(Vec::new()));
     let errors = Arc::new(Mutex::new(0usize));
 
     thread::scope(|scope| {
+        let mut handles: Vec<thread::ScopedJoinHandle<'_, ()>> =
+            Vec::with_capacity(MAX_INFLIGHT.min(samples.max(1)));
         for i in 0..samples {
             let intended = t0 + interval * i as u32;
             let now = Instant::now();
             if now < intended {
                 thread::sleep(intended - now);
             }
+            // Bound concurrency without rewriting the open-loop schedule semantics.
+            if handles.len() >= MAX_INFLIGHT {
+                let h = handles.remove(0);
+                let _ = h.join();
+            }
             let agent = agent.clone();
             let url = ep.url.clone();
             let ok = Arc::clone(&ok);
             let errors = Arc::clone(&errors);
-            scope.spawn(move || {
+            handles.push(scope.spawn(move || {
                 let send = Instant::now();
                 let outcome = agent
                     .post(&url)
@@ -108,18 +111,39 @@ fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) 
                             .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
                             .and_then(|v| v.get("result").and_then(|r| r.as_u64()))
                         {
-                            Some(slot) => ok.lock().unwrap().push((i, latency_ns, slot)),
-                            None => *errors.lock().unwrap() += 1,
+                            Some(slot) => {
+                                if let Ok(mut g) = ok.lock() {
+                                    g.push((i, latency_ns, slot));
+                                }
+                            }
+                            None => {
+                                if let Ok(mut g) = errors.lock() {
+                                    *g += 1;
+                                }
+                            }
                         }
                     }
-                    Err(_) => *errors.lock().unwrap() += 1,
+                    Err(_) => {
+                        if let Ok(mut g) = errors.lock() {
+                            *g += 1;
+                        }
+                    }
                 }
-            });
+            }));
+        }
+        for h in handles {
+            let _ = h.join();
         }
     });
 
-    let mut data = Arc::try_unwrap(ok).unwrap().into_inner().unwrap();
-    let errors = Arc::try_unwrap(errors).unwrap().into_inner().unwrap();
+    let mut data = match Arc::try_unwrap(ok) {
+        Ok(m) => m.into_inner().unwrap_or_default(),
+        Err(a) => a.lock().map(|g| g.clone()).unwrap_or_default(),
+    };
+    let errors = match Arc::try_unwrap(errors) {
+        Ok(m) => m.into_inner().unwrap_or(0),
+        Err(a) => a.lock().map(|g| *g).unwrap_or(0),
+    };
     data.sort_by_key(|&(tick, _, _)| tick);
 
     let mut rec = LatencyRecorder::with_capacity(data.len());
@@ -128,7 +152,7 @@ fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) 
     for &(tick, latency_ns, slot) in &data {
         rec.record_ns(latency_ns);
         slots.push((tick, slot));
-        last_slot = Some(slot); // data is tick-sorted, so this ends on the latest
+        last_slot = Some(slot);
     }
 
     Raw {
@@ -144,6 +168,7 @@ fn run_endpoint(ep: &Endpoint, samples: usize, interval: Duration, t0: Instant) 
 /// Probe every endpoint concurrently on a shared schedule and compute per-endpoint
 /// latency + tick-aligned slot-lag.
 pub fn probe_all(endpoints: &[Endpoint], samples: usize, interval_ms: u64) -> Vec<ProbeResult> {
+    let samples = samples.max(1);
     let interval = Duration::from_millis(interval_ms.max(1));
     // Small startup offset so every thread shares the same tick-0 origin.
     let t0 = Instant::now() + Duration::from_millis(50);
@@ -153,10 +178,7 @@ pub fn probe_all(endpoints: &[Endpoint], samples: usize, interval_ms: u64) -> Ve
             .iter()
             .map(|ep| scope.spawn(move || run_endpoint(ep, samples, interval, t0)))
             .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().expect("probe thread"))
-            .collect()
+        handles.into_iter().filter_map(|h| h.join().ok()).collect()
     });
 
     // Leading (max) slot observed at each shared tick.
@@ -180,7 +202,7 @@ pub fn probe_all(endpoints: &[Endpoint], samples: usize, interval_ms: u64) -> Ve
                 let mut sum = 0i64;
                 let mut max = 0i64;
                 for &(tick, slot) in &raw.slots {
-                    let lag = leader[&tick] as i64 - slot as i64;
+                    let lag = leader.get(&tick).copied().unwrap_or(slot) as i64 - slot as i64;
                     sum += lag;
                     max = max.max(lag);
                 }
@@ -204,9 +226,9 @@ pub fn probe_all(endpoints: &[Endpoint], samples: usize, interval_ms: u64) -> Ve
         .collect()
 }
 
-/// Endpoint set from the environment: a public mainnet baseline plus rpc edge when
-/// `SOLBENCH_RPCEDGE_URL` is set (full URL incl. `?api-key=` — read at runtime,
-/// never committed).
+/// Endpoint set from the environment: a public mainnet baseline plus an optional
+/// primary provider when `SOLBENCH_RPCEDGE_URL` is set (full URL incl. `?api-key=` —
+/// read at runtime, never committed).
 pub fn endpoints_from_env() -> Vec<Endpoint> {
     let mut endpoints = Vec::new();
     if let Ok(url) = std::env::var("SOLBENCH_RPCEDGE_URL") {
@@ -222,4 +244,23 @@ pub fn endpoints_from_env() -> Vec<Endpoint> {
         url: "https://api.mainnet-beta.solana.com".into(),
     });
     endpoints
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::util::redact_host;
+
+    #[test]
+    fn redact_used_for_probe_hosts() {
+        assert_eq!(
+            redact_host("https://u:p@rpc.example.com/?api-key=x"),
+            "rpc.example.com"
+        );
+    }
+
+    #[test]
+    fn empty_endpoints_returns_empty() {
+        assert!(probe_all(&[], 5, 50).is_empty());
+    }
 }

@@ -13,24 +13,15 @@ pub fn race(_slots: usize) -> Result<(), String> {
 }
 
 #[cfg(feature = "grpc")]
-fn redact_host(url: &str) -> String {
-    let no_scheme = url.split("://").nth(1).unwrap_or(url);
-    no_scheme
-        .split(['/', '?'])
-        .next()
-        .unwrap_or(no_scheme)
-        .to_string()
-}
-
-#[cfg(feature = "grpc")]
 pub fn race(target: usize) -> Result<(), String> {
+    use crate::util::redact_host;
     use solbench_core::LatencyRecorder;
     use std::collections::HashMap;
     use std::time::Instant;
     use tokio::sync::mpsc;
 
     let a = std::env::var("SOLBENCH_GRPC_A")
-        .map_err(|_| "set SOLBENCH_GRPC_A (e.g. https://grpc.rpcedge.com:443)")?;
+        .map_err(|_| "set SOLBENCH_GRPC_A (e.g. https://grpc.example.com:443)")?;
     let b = std::env::var("SOLBENCH_GRPC_B")
         .map_err(|_| "set SOLBENCH_GRPC_B (a second gRPC endpoint to race against)")?;
     let a_tok = std::env::var("SOLBENCH_GRPC_A_TOKEN").ok();
@@ -49,6 +40,8 @@ pub fn race(target: usize) -> Result<(), String> {
         let mut wins = [0usize; 2];
         let mut deltas = LatencyRecorder::new();
         let mut raced = 0usize;
+        // Bound unpaired map if one side is silent (asymmetric stream).
+        const MAX_UNPAIRED: usize = 50_000;
 
         println!("racing {host_a} (A) vs {host_b} (B) on slot first-seen ...");
         while raced < target {
@@ -57,6 +50,10 @@ pub fn race(target: usize) -> Result<(), String> {
             };
             match first.get(&(slot, status)) {
                 None => {
+                    if first.len() >= MAX_UNPAIRED {
+                        // Drop unpaired backlog if one side is silent (asymmetric stream).
+                        first.clear();
+                    }
                     first.insert((slot, status), (id, at));
                 }
                 Some(&(fid, fat)) if fid != id => {
@@ -64,7 +61,7 @@ pub fn race(target: usize) -> Result<(), String> {
                     deltas.record(at.saturating_duration_since(fat));
                     first.remove(&(slot, status));
                     raced += 1;
-                    if raced.is_multiple_of(25) {
+                    if raced % 25 == 0 {
                         println!("  {raced}/{target} events raced");
                     }
                 }

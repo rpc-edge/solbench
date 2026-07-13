@@ -58,16 +58,10 @@ pub fn render(dir: &Path, public_output: Option<&Path>, operator_lifecycle: bool
         validate_operator_lifecycle(&manifest)?;
     }
     let summary = build(&manifest, &events, operator_lifecycle);
-    fs::write(
-        dir.join("summary.json"),
-        serde_json::to_vec_pretty(&summary)?,
-    )?;
+    super::artifacts::atomic_json(&dir.join("summary.json"), &summary)?;
     let md = markdown(&summary, &health);
     fs::write(dir.join("summary.md"), &md)?;
-    fs::write(
-        dir.join("report.json"),
-        serde_json::to_vec_pretty(&summary)?,
-    )?;
+    super::artifacts::atomic_json(&dir.join("report.json"), &summary)?;
     fs::write(dir.join("report.md"), &md)?;
     fs::write(dir.join("report.html"), html(&summary, &health))?;
     super::artifacts::write_checksums(dir)?;
@@ -379,7 +373,7 @@ fn format_count(value: u64) -> String {
     let digits = value.to_string();
     let mut output = String::with_capacity(digits.len() + digits.len() / 3);
     for (index, character) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+        if index > 0 && (digits.len() - index) % 3 == 0 {
             output.push(',');
         }
         output.push(character);

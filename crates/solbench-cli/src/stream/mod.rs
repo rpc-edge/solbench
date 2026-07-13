@@ -14,7 +14,13 @@ use std::path::PathBuf;
 
 #[derive(Subcommand)]
 pub enum StreamCommand {
+    /// Validate a stream config file (no network). Env names only; never paste secrets.
+    CheckConfig {
+        #[arg(long)]
+        config: PathBuf,
+    },
     /// Run one fresh attempt. Source failures abort; there is no reconnect/retry.
+    /// Requires a build with `--features grpc`.
     Run {
         #[arg(long)]
         config: PathBuf,
@@ -34,7 +40,7 @@ pub enum StreamCommand {
         artifact_dir: PathBuf,
         #[arg(long)]
         public_output: Option<PathBuf>,
-        /// Publish only a 50k RPCEdge deshred-vs-processed operator-host run.
+        /// Publish only a 50k operator-host deshred-vs-processed lifecycle run.
         #[arg(long, requires = "public_output")]
         operator_lifecycle: bool,
     },
@@ -49,6 +55,16 @@ pub enum StreamCommand {
 
 pub fn execute(command: StreamCommand) -> Result<()> {
     match command {
+        StreamCommand::CheckConfig { config } => {
+            let cfg = config::StreamConfig::load(&config)?;
+            println!(
+                "ok: profile={} sources={} target={}",
+                cfg.run.profile,
+                cfg.sources.len(),
+                cfg.run.target_matched_signatures
+            );
+            Ok(())
+        }
         StreamCommand::Run {
             config,
             artifact_root,

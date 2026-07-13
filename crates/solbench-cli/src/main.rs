@@ -11,6 +11,7 @@ mod report;
 mod send;
 mod server;
 mod stream;
+mod util;
 
 use clap::{Parser, Subcommand};
 use probe::{endpoints_from_env, probe_all};

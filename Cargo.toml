@@ -5,9 +5,15 @@ members = ["crates/solbench-core", "crates/solbench-cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+# Policy: track recent stable. CI uses stable; raise when APIs require it.
+rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/rpc-edge/solbench"
+homepage = "https://github.com/rpc-edge/solbench"
+readme = "README.md"
 authors = ["0xNyk <0xnykcd@googlemail.com>"]
+keywords = ["solana", "rpc", "benchmark", "latency", "grpc"]
+categories = ["command-line-utilities", "development-tools", "network-programming"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -15,3 +21,8 @@ serde_json = "1"
 clap = { version = "4", features = ["derive"] }
 ureq = "2"
 tiny_http = "0.12"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
