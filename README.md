@@ -59,18 +59,40 @@ comparison that reflects the infrastructure, not your laptop's geography.
 
 ## Install
 
-Not yet on crates.io. Install the binary from source (Rust stable):
+Not yet on crates.io. Prefer a **GitHub Release** binary (when tagged `v*`), or build from source (Rust stable):
 
 ```sh
+# From source (always works)
 cargo install --git https://github.com/rpc-edge/solbench solbench
-```
 
-Or clone and build:
-
-```sh
+# Or clone and build
 git clone https://github.com/rpc-edge/solbench && cd solbench
 cargo build --release   # ./target/release/solbench
 ```
+
+Tagged releases attach linux/macOS tarballs via `.github/workflows/release.yml`.
+
+### Which repo for which benchmark?
+
+| Measurement | Tool |
+|---|---|
+| Read latency, slot-lag, gRPC first-seen, stream races (deshred vs processed) | **this repo (`solbench`)** |
+| Transaction submit → observe, leader-paced route A/B, QUIC relay | [`solana-tx-bench`](https://github.com/rpc-edge/solana-tx-bench) |
+
+Published rpc edge reports always set `repositoryUrl` to the harness that produced them. Do not substitute.
+
+### Hosted leaderboard feed
+
+`solbench report` emits JSON matching [rpcedge.com/benchmarks/live](https://rpcedge.com/benchmarks/live).
+
+```sh
+# On a co-located host (not a laptop) — geography dominates read latency
+SOLBENCH_RPCEDGE_URL="https://rpc.rpcedge.com/?api-key=…" \
+  solbench report --region "Frankfurt · Equinix FR13" --window "rolling 24h" \
+  > apps/web/data/benchmarks-live.json
+```
+
+In the monorepo: `scripts/publish-benchmarks-live.sh` (refuses smoke/laptop region labels unless `FORCE_NON_COLO=1`).
 
 ## Usage
 
